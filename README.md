@@ -1,6 +1,6 @@
-# VaultUSB - Raspberry Pi Zero USB Vault (DietPi Bookworm Compatible)
+# VaultUSB - Raspberry Pi Zero USB Vault (DietPi & Raspbian Bookworm Compatible)
 
-A secure, encrypted file storage system running on Raspberry Pi Zero with Wi-Fi management and system update capabilities. Optimized for DietPi Bookworm lightweight Linux distribution.
+A secure, encrypted file storage system running on Raspberry Pi Zero with Wi-Fi management and system update capabilities. Optimized for both DietPi Bookworm and Raspberry Pi OS (Raspbian) Bookworm.
 
 ## Features
 
@@ -47,7 +47,7 @@ A secure, encrypted file storage system running on Raspberry Pi Zero with Wi-Fi 
 
 ## Software Requirements
 
-- DietPi Bookworm (latest version recommended)
+- **DietPi Bookworm** (latest version recommended) OR **Raspberry Pi OS (Raspbian) Bookworm**
 - Python 3.11+
 - User with sudo privileges
 - Debian Bookworm base system
@@ -56,33 +56,55 @@ A secure, encrypted file storage system running on Raspberry Pi Zero with Wi-Fi 
 
 ### Quick Installation (Recommended)
 
-For the easiest installation on DietPi Bookworm, use the automated installer:
-
+#### For DietPi Bookworm:
 ```bash
 # Download and run the DietPi Bookworm installer
-curl -sSL https://raw.githubusercontent.com/yourusername/vault-usb/main/scripts/install_dietpi.sh | bash
+curl -sSL https://raw.githubusercontent.com/adri6412/usb-vault/main/scripts/install_dietpi.sh | bash
+```
+
+#### For Raspbian Bookworm:
+```bash
+# Download and run the Raspbian Bookworm installer
+curl -sSL https://raw.githubusercontent.com/adri6412/usb-vault/main/scripts/install_raspbian.sh | bash
 ```
 
 ### Manual Installation
 
-### 1. Flash DietPi Bookworm
+#### Option A: DietPi Bookworm
 
-Download and flash DietPi Bookworm to your microSD card using the DietPi Imager or Raspberry Pi Imager.
+1. **Flash DietPi Bookworm**
+   Download and flash DietPi Bookworm to your microSD card using the DietPi Imager or Raspberry Pi Imager.
 
-### 2. Initial DietPi Bookworm Setup
+2. **Initial DietPi Bookworm Setup**
+   Boot your Pi and run the DietPi configuration:
+   ```bash
+   sudo dietpi-config
+   ```
+   
+   Configure:
+   - Change password
+   - Enable SSH
+   - Configure Wi-Fi (optional)
+   - Enable USB gadget mode
+   - Ensure Python 3.11 is installed
 
-Boot your Pi and run the DietPi configuration:
+#### Option B: Raspbian Bookworm
 
-```bash
-sudo dietpi-config
-```
+1. **Flash Raspbian Bookworm**
+   Download and flash Raspberry Pi OS (Raspbian) Bookworm to your microSD card using Raspberry Pi Imager.
 
-Configure:
-- Change password
-- Enable SSH
-- Configure Wi-Fi (optional)
-- Enable USB gadget mode
-- Ensure Python 3.11 is installed
+2. **Initial Raspbian Bookworm Setup**
+   Boot your Pi and run the Raspberry Pi configuration:
+   ```bash
+   sudo raspi-config
+   ```
+   
+   Configure:
+   - Change password
+   - Enable SSH
+   - Configure Wi-Fi (optional)
+   - Enable USB gadget mode
+   - Update system packages
 
 ### 3. Boot and Connect
 
@@ -96,8 +118,8 @@ ssh dietpi@[pi-ip-address]
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/vault-usb.git
-cd vault-usb
+git clone https://github.com/adri6412/usb-vault.git
+cd usb-vault
 
 # Make scripts executable
 chmod +x scripts/*.sh
@@ -357,7 +379,7 @@ For support and questions:
 3. Create an issue on GitHub
 4. Check the documentation
 
-## DietPi Bookworm Specific Features
+## OS-Specific Features
 
 ### DietPi Bookworm Integration
 - Optimized for DietPi Bookworm lightweight distribution
@@ -367,7 +389,17 @@ For support and questions:
 - Optimized resource usage for Bookworm
 - Python 3.11 compatibility
 
-### DietPi Bookworm Commands
+### Raspbian Bookworm Integration
+- Optimized for Raspberry Pi OS (Raspbian) Bookworm
+- Automated installation script
+- Desktop integration
+- System status monitoring
+- Enhanced resource allocation
+- Python 3.11 compatibility
+
+### OS-Specific Commands
+
+#### DietPi Bookworm:
 ```bash
 # Check VaultUSB status
 vaultusb-status
@@ -380,18 +412,36 @@ dietpi-software
 
 # Check DietPi version
 cat /boot/dietpi/.dietpi_version
+```
 
-# Check Debian version
+#### Raspbian Bookworm:
+```bash
+# Check VaultUSB status
+vaultusb-status
+
+# Access Raspberry Pi configuration
+sudo raspi-config
+
+# View system information
+raspi-config
+
+# Check Raspbian version
 cat /etc/os-release | grep VERSION
 ```
 
-### DietPi Bookworm Optimization
+### OS-Specific Optimizations
+
+#### DietPi Bookworm:
 - Reduced memory footprint (256MB limit)
 - Optimized Python 3.11 dependencies
 - Streamlined service configuration
 - DietPi-specific networking setup
-- Enhanced logging and monitoring
-- Bookworm-specific package management
+
+#### Raspbian Bookworm:
+- Enhanced memory allocation (512MB limit)
+- Full Python 3.11 support
+- Desktop environment integration
+- Raspberry Pi specific optimizations
 
 ## Changelog
 
@@ -403,4 +453,5 @@ cat /etc/os-release | grep VERSION
 - Web-based management interface
 - System update management
 - TOTP 2FA support
-- DietPi compatibility
+- DietPi Bookworm compatibility
+- Raspbian Bookworm compatibility

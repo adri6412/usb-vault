@@ -1,23 +1,23 @@
 #!/bin/bash
-# Complete VaultUSB installation script for DietPi Bookworm
+# Complete VaultUSB installation script for Raspbian Bookworm
 
 set -e
 
-echo "VaultUSB Installation for DietPi Bookworm"
-echo "========================================="
+echo "VaultUSB Installation for Raspbian Bookworm"
+echo "==========================================="
 
-# Check if running on DietPi
-if [ ! -f /boot/dietpi/.dietpi_version ]; then
-    echo "Error: This script is designed for DietPi"
-    echo "Please install DietPi first: https://dietpi.com/"
+# Check if running on Raspbian
+if [ ! -f /etc/os-release ] || ! grep -q "Raspbian" /etc/os-release; then
+    echo "Error: This script is designed for Raspbian"
+    echo "Please install Raspberry Pi OS (Raspbian) first: https://www.raspberrypi.org/downloads/"
     exit 1
 fi
 
 # Check if it's Bookworm
 if ! grep -q "bookworm" /etc/os-release; then
-    echo "Error: This script is optimized for DietPi Bookworm"
+    echo "Error: This script is optimized for Raspbian Bookworm"
     echo "Detected OS: $(grep PRETTY_NAME /etc/os-release | cut -d'"' -f2)"
-    echo "Please use DietPi Bookworm for optimal compatibility"
+    echo "Please use Raspberry Pi OS Bookworm for optimal compatibility"
     exit 1
 fi
 
@@ -28,15 +28,15 @@ if [ "$EUID" -eq 0 ]; then
     exit 1
 fi
 
-echo "Detected DietPi version: $(cat /boot/dietpi/.dietpi_version)"
+echo "Detected Raspbian version: $(grep VERSION_ID /etc/os-release | cut -d'"' -f2)"
 
 # Update system
-echo "Updating DietPi system..."
+echo "Updating Raspbian system..."
 sudo apt-get update
 sudo apt-get upgrade -y
 
-# Install essential packages for DietPi Bookworm
-echo "Installing essential packages for DietPi Bookworm..."
+# Install essential packages for Raspbian Bookworm
+echo "Installing essential packages for Raspbian Bookworm..."
 sudo apt-get install -y \
     python3 \
     python3-pip \
@@ -58,23 +58,18 @@ sudo apt-get install -y \
     iptables \
     iptables-persistent \
     python3-cryptography \
-    python3-setuptools
-
-# Install DietPi tools if not present
-if ! command -v dietpi-software &> /dev/null; then
-    echo "Installing DietPi tools..."
-    curl -sSL https://github.com/MichaIng/DietPi/raw/master/.build/images/dietpi-installer | sudo bash
-fi
+    python3-setuptools \
+    rpi-update
 
 # Enable USB gadget mode
 echo "Enabling USB gadget mode..."
-sudo dietpi-config advanced enable_usb_gadget
+sudo raspi-config nonint do_usb_gadget
 
 # Configure Wi-Fi if not already configured
 if [ ! -f /etc/wpa_supplicant/wpa_supplicant.conf ]; then
     echo "Configuring Wi-Fi..."
-    sudo dietpi-config
-    echo "Please configure Wi-Fi in the DietPi configuration menu"
+    echo "Please configure Wi-Fi using: sudo raspi-config"
+    echo "Or manually edit /etc/wpa_supplicant/wpa_supplicant.conf"
     echo "Press Enter when done..."
     read
 fi
@@ -95,7 +90,7 @@ chmod +x scripts/*.sh
 
 # Run bootstrap
 echo "Running VaultUSB bootstrap..."
-./scripts/bootstrap_vault.sh
+./scripts/bootstrap_raspbian.sh
 
 # Setup networking
 echo "Setting up networking..."
@@ -109,8 +104,8 @@ sudo ./scripts/enable_usb_gadget.sh
 echo "Generating TLS certificate..."
 ./scripts/make_cert.sh
 
-# Configure DietPi services
-echo "Configuring DietPi services..."
+# Configure Raspbian services
+echo "Configuring Raspbian services..."
 
 # Disable conflicting services
 sudo systemctl disable dnsmasq
@@ -131,11 +126,11 @@ sudo systemctl start hostapd
 sudo systemctl start dnsmasq@usb0
 sudo systemctl start dnsmasq@uap0
 
-# Configure DietPi to start VaultUSB on boot
-echo "Configuring DietPi startup..."
-sudo tee /etc/systemd/system/dietpi-vaultusb.service > /dev/null << 'EOF'
+# Configure Raspbian to start VaultUSB on boot
+echo "Configuring Raspbian startup..."
+sudo tee /etc/systemd/system/raspbian-vaultusb.service > /dev/null << 'EOF'
 [Unit]
-Description=DietPi VaultUSB Startup
+Description=Raspbian VaultUSB Startup
 After=multi-user.target
 
 [Service]
@@ -147,11 +142,11 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 EOF
 
-sudo systemctl enable dietpi-vaultusb.service
+sudo systemctl enable raspbian-vaultusb.service
 
-# Create DietPi menu entry
-echo "Creating DietPi menu entry..."
-sudo tee /etc/dietpi/dietpi-software/desktop/vaultusb.desktop > /dev/null << 'EOF'
+# Create desktop entry for easy access
+echo "Creating desktop entry..."
+sudo tee /usr/share/applications/vaultusb.desktop > /dev/null << 'EOF'
 [Desktop Entry]
 Name=VaultUSB
 Comment=USB Vault Management
@@ -214,7 +209,7 @@ sudo tee /opt/vaultusb/system_info.txt > /dev/null << EOF
 VaultUSB System Information
 ==========================
 Installation Date: $(date)
-DietPi Version: $(cat /boot/dietpi/.dietpi_version)
+Raspbian Version: $(grep VERSION_ID /etc/os-release | cut -d'"' -f2)
 Kernel Version: $(uname -r)
 Python Version: $(python3 --version)
 VaultUSB Version: 1.0.0
@@ -233,11 +228,11 @@ IMPORTANT: Change all passwords after first login!
 EOF
 
 echo ""
-echo "VaultUSB installation complete!"
-echo "==============================="
+echo "VaultUSB installation complete for Raspbian Bookworm!"
+echo "====================================================="
 echo ""
 echo "System Information:"
-echo "DietPi Version: $(cat /boot/dietpi/.dietpi_version)"
+echo "Raspbian Version: $(grep VERSION_ID /etc/os-release | cut -d'"' -f2)"
 echo "Installation Date: $(date)"
 echo ""
 echo "Access URLs:"
@@ -256,6 +251,7 @@ echo "Useful Commands:"
 echo "Check status: vaultusb-status"
 echo "View logs: sudo journalctl -u vaultusb -f"
 echo "Restart service: sudo systemctl restart vaultusb"
+echo "Configure system: sudo raspi-config"
 echo ""
 echo "Reboot recommended to ensure all services start properly."
 echo "Run: sudo reboot"

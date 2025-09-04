@@ -1,25 +1,25 @@
 #!/bin/bash
-# Bootstrap VaultUSB application for DietPi
+# Bootstrap VaultUSB application for Raspbian Bookworm
 
 set -e
 
-echo "Bootstrapping VaultUSB for DietPi..."
+echo "Bootstrapping VaultUSB for Raspbian Bookworm..."
 
-# Check if running on DietPi Bookworm
-if [ ! -f /boot/dietpi/.dietpi_version ]; then
-    echo "Warning: This script is optimized for DietPi"
+# Check if running on Raspbian
+if [ ! -f /etc/os-release ] || ! grep -q "Raspbian" /etc/os-release; then
+    echo "Warning: This script is optimized for Raspbian"
     echo "Continuing anyway..."
 else
-    DIETPI_VERSION=$(cat /boot/dietpi/.dietpi_version)
-    echo "Detected DietPi version: $DIETPI_VERSION"
+    OS_VERSION=$(grep VERSION_ID /etc/os-release | cut -d'"' -f2)
+    echo "Detected Raspbian version: $OS_VERSION"
     
     # Check if it's Bookworm
     if ! grep -q "bookworm" /etc/os-release; then
-        echo "Warning: This script is optimized for DietPi Bookworm"
+        echo "Warning: This script is optimized for Raspbian Bookworm"
         echo "Detected OS: $(grep PRETTY_NAME /etc/os-release | cut -d'"' -f2)"
         echo "Continuing anyway..."
     else
-        echo "DietPi Bookworm detected - optimal configuration will be applied"
+        echo "Raspbian Bookworm detected - optimal configuration will be applied"
     fi
 fi
 
@@ -52,12 +52,9 @@ cp README.md /opt/vaultusb/
 cp LICENSE /opt/vaultusb/
 
 # Use appropriate configuration file
-if grep -q "Raspbian" /etc/os-release && grep -q "bookworm" /etc/os-release; then
+if grep -q "bookworm" /etc/os-release; then
     echo "Using Raspbian Bookworm configuration..."
     cp config_raspbian.toml /opt/vaultusb/config.toml
-elif grep -q "bookworm" /etc/os-release; then
-    echo "Using DietPi Bookworm configuration..."
-    cp config_bookworm.toml /opt/vaultusb/config.toml
 else
     echo "Using standard configuration..."
     cp config.toml /opt/vaultusb/
@@ -74,8 +71,8 @@ python3 -m venv venv
 source venv/bin/activate
 
 # Install Python dependencies
-echo "Installing Python dependencies for DietPi Bookworm..."
-# DietPi Bookworm uses apt for Python packages, install system packages first
+echo "Installing Python dependencies for Raspbian Bookworm..."
+# Raspbian Bookworm uses apt for Python packages, install system packages first
 sudo apt-get update
 sudo apt-get install -y python3-pip python3-venv python3-dev build-essential python3-wheel
 
@@ -83,7 +80,7 @@ sudo apt-get install -y python3-pip python3-venv python3-dev build-essential pyt
 pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
 
-# DietPi Bookworm specific: ensure cryptography is properly installed
+# Raspbian Bookworm specific: ensure cryptography is properly installed
 pip install --upgrade cryptography
 
 # Create necessary directories
@@ -155,14 +152,14 @@ EOF
 # Set up sudoers
 echo "Setting up sudoers..."
 sudo tee /etc/sudoers.d/vaultusb > /dev/null << 'EOF'
-# VaultUSB sudoers configuration
+# VaultUSB sudoers configuration for Raspbian
 vaultusb ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/rpi-update, /usr/bin/raspi-config, /sbin/reboot, /usr/sbin/iw, /usr/sbin/wpa_cli, /usr/sbin/hostapd, /usr/sbin/dnsmasq
 EOF
 
 sudo chmod 440 /etc/sudoers.d/vaultusb
 
 echo ""
-echo "VaultUSB bootstrap complete!"
+echo "VaultUSB bootstrap complete for Raspbian Bookworm!"
 echo ""
 echo "Default credentials:"
 echo "  Username: admin"
