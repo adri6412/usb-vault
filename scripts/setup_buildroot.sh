@@ -164,6 +164,9 @@ BR2_PACKAGE_SYSTEMD_NETWORKD=y
 BR2_PACKAGE_HOSTAPD=y
 BR2_PACKAGE_DNSMASQ=y
 
+# Disable udev when using systemd (systemd includes udev)
+BR2_PACKAGE_UDEV=n
+
 # Python runtime
 BR2_PACKAGE_PYTHON3=y
 BR2_PACKAGE_PYTHON3_PIP=y
