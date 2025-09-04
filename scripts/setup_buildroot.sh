@@ -192,8 +192,9 @@ EOF
   print_step "Configuro external tree e overlay"
   printf "BR2_EXTERNAL=%s\n" "${BOARD_DIR}" >> .config
 
-  # Append our fragment values to .config safely
-  "${BR_DIR}/scripts/kconfig/merge_config.sh" -m .config "${BOARD_DIR}/configs/raspberrypi0_vaultusb_defconfig" || true
+  # Append our fragment values to .config directly
+  print_step "Aggiungo configurazioni VaultUSB"
+  cat "${BOARD_DIR}/configs/raspberrypi0_vaultusb_defconfig" >> .config
 
   print_step "Avvio build immagine (questo richiede tempo)"
   make -j"$(nproc)" || make
