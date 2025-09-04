@@ -245,15 +245,70 @@ EOF
   sed -i '/BR2_PACKAGE_SYSTEMD/d' .config
   sed -i '/BR2_INIT_SYSTEMD/d' .config
   sed -i '/BR2_PACKAGE_SYSTEMD_LOGIND/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_UTILS/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_BOOT/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_NETWORKD/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_RESOLVED/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_TIMESYNCD/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_ANALYZE/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_CATALOG/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_COREDUMP/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_FIRSTBOOT/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_HIBERNATE/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_IMPORT/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_LOCALED/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_MACHINED/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_POLKIT/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_QUOTACHECK/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_RANDOMSEED/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_RFKILL/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_SMACKSUPPORT/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_SYSUSERS/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_VCONSOLE/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_XDG_AUTOSTART/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_XORG_LAUNCH_HELPER/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_ZSH_COMPLETION/d' .config
 
   # Register external tree and append our fragment
   print_step "Configuro external tree e overlay"
   printf "BR2_EXTERNAL=%s\n" "${BOARD_DIR}" >> .config
 
+  # Force disable systemd completely
+  print_step "Disabilito completamente systemd"
+  echo "BR2_INIT_SYSTEMD=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_UTILS=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_BOOT=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_NETWORKD=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_RESOLVED=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_TIMESYNCD=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_ANALYZE=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_CATALOG=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_COREDUMP=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_FIRSTBOOT=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_HIBERNATE=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_IMPORT=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_LOCALED=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_MACHINED=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_POLKIT=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_QUOTACHECK=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_RANDOMSEED=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_RFKILL=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_SMACKSUPPORT=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_SYSUSERS=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_VCONSOLE=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_XDG_AUTOSTART=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_XORG_LAUNCH_HELPER=n" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_ZSH_COMPLETION=n" >> .config
+
   # Append our fragment values to .config directly
   print_step "Aggiungo configurazioni VaultUSB"
   cat "${BOARD_DIR}/configs/raspberrypi0_vaultusb_defconfig" >> .config
 
+  # Clean and reconfigure to avoid dependency issues
+  print_step "Pulisco build precedente per evitare conflitti"
+  make clean
+  
   print_step "Avvio build immagine (questo richiede tempo)"
   make -j"$(nproc)" || make
 
