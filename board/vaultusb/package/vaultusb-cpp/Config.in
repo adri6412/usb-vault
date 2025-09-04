@@ -1,0 +1,12 @@
+config BR2_PACKAGE_VAULTUSB_CPP
+	bool "vaultusb-cpp"
+	depends on BR2_TOOLCHAIN_HAS_THREADS
+	depends on BR2_INSTALL_LIBSTDCPP
+	select BR2_PACKAGE_SQLITE
+	select BR2_PACKAGE_OPENSSL
+	select BR2_PACKAGE_LIBARGON2
+	help
+	  VaultUSB C++ server for encrypted file storage and WiFi management
+	  on Raspberry Pi Zero.
+
+	  https://github.com/your-repo/vaultusb

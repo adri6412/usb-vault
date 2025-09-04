@@ -49,12 +49,18 @@ main() {
   print_step "Preparo overlay per server C++"
   mkdir -p "${OVERLAY_DIR}/usr/local/bin"
   mkdir -p "${OVERLAY_DIR}/opt/vaultusb"
-  # The actual C++ binary will be built inside Buildroot via a package; here we only stage assets
+  
+  # Copy templates and static files
   if [ -d "${WORKDIR}/app/templates" ]; then
     cp -r "${WORKDIR}/app/templates" "${OVERLAY_DIR}/opt/vaultusb/" 2>/dev/null || true
   fi
   if [ -d "${WORKDIR}/app/static" ]; then
     cp -r "${WORKDIR}/app/static" "${OVERLAY_DIR}/opt/vaultusb/" 2>/dev/null || true
+  fi
+  
+  # Copy configuration files
+  if [ -f "${WORKDIR}/config.toml" ]; then
+    cp "${WORKDIR}/config.toml" "${OVERLAY_DIR}/opt/vaultusb/" 2>/dev/null || true
   fi
 
   # Create init scripts instead of systemd services
@@ -65,9 +71,9 @@ main() {
 #!/bin/sh
 case "$1" in
   start)
-    echo "Starting VaultUSB..."
+    echo "Starting VaultUSB C++ server..."
     /usr/local/sbin/vaultusb-firstboot.sh
-    start-stop-daemon --start --quiet --pidfile /var/run/vaultusb.pid --make-pidfile --background --exec /usr/local/bin/vaultusb_cpp -- 8000
+    start-stop-daemon --start --quiet --pidfile /var/run/vaultusb.pid --make-pidfile --background --exec /usr/local/bin/vaultusb_cpp -- --port 8000 --config /opt/vaultusb/config.toml
     ;;
   stop)
     echo "Stopping VaultUSB..."
@@ -109,6 +115,7 @@ log() { echo "[vaultusb-firstboot] $*"; }
 # C++ binary is shipped by Buildroot package as /usr/local/bin/vaultusb_cpp
 if [ ! -x "/usr/local/bin/vaultusb_cpp" ]; then
   log "vaultusb_cpp non trovato, verificare pacchetto Buildroot"
+  exit 1
 fi
 
 # Ensure user exists
@@ -117,8 +124,17 @@ if ! id -u vaultusb >/dev/null 2>&1; then
   chown -R vaultusb:vaultusb "${APP_DIR}"
 fi
 
+# Create vault directory
+mkdir -p "${APP_DIR}/vault"
+chown vaultusb:vaultusb "${APP_DIR}/vault"
+chmod 700 "${APP_DIR}/vault"
+
+# Set up database directory
+mkdir -p "$(dirname "${APP_DIR}/vault.db")"
+chown vaultusb:vaultusb "$(dirname "${APP_DIR}/vault.db")"
+
 # Enable services (init scripts are already enabled by default)
-echo "VaultUSB services will start automatically on boot"
+echo "VaultUSB C++ services will start automatically on boot"
 EOF
   chmod +x "${OVERLAY_DIR}/usr/local/sbin/vaultusb-firstboot.sh"
 
@@ -148,15 +164,12 @@ EOF
   # Create BR external tree to register overlay and options
   mkdir -p "${BOARD_DIR}"
   cat > "${BOARD_DIR}/Config.in" << 'EOF'
-config BR2_PACKAGE_VAULTUSB
-    bool "vaultusb overlay"
-    help
-      Installa l'overlay di VaultUSB nel rootfs.
+source "$BR2_EXTERNAL_VAULTUSB_PATH/package/vaultusb-cpp/Config.in"
 EOF
 
   cat > "${BOARD_DIR}/external.desc" << 'EOF'
 name: VAULTUSB
-desc: External BR tree for VaultUSB overlay and config
+desc: External BR tree for VaultUSB C++ application and config
 EOF
 
   cat > "${BOARD_DIR}/external.mk" << 'EOF'
@@ -186,12 +199,30 @@ BR2_PACKAGE_NETIFRC=y
 BR2_INIT_SYSTEMD=n
 BR2_PACKAGE_SYSTEMD=n
 
-# Python runtime (minimal for PyInstaller binaries)
-BR2_PACKAGE_PYTHON3=y
-BR2_PACKAGE_PYTHON3_SSL=y
+# C++ runtime and libraries
+BR2_TOOLCHAIN_BUILDROOT_CXX=y
+BR2_PACKAGE_LIBSTDCPP=y
+
+# SQLite3 for database
+BR2_PACKAGE_SQLITE=y
+
+# OpenSSL for crypto operations
+BR2_PACKAGE_OPENSSL=y
+BR2_PACKAGE_OPENSSL_BIN=y
+
+# Argon2 for password hashing
+BR2_PACKAGE_LIBARGON2=y
+
+# Additional utilities
+BR2_PACKAGE_UTIL_LINUX=y
+BR2_PACKAGE_UTIL_LINUX_LIBUUID=y
+BR2_PACKAGE_UTIL_LINUX_LIBBLKID=y
 
 # Rootfs overlay
 BR2_ROOTFS_OVERLAY="${OVERLAY_DIR}"
+
+# Enable VaultUSB C++ package
+BR2_PACKAGE_VAULTUSB_CPP=y
 
 # Enable systemd service at boot
 BR2_SYSTEM_DHCP="eth0"
