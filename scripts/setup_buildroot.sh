@@ -175,10 +175,15 @@ BR2_ARM_EABIHF=y
 
 # Use BusyBox init instead of systemd (simpler for embedded)
 BR2_INIT_BUSYBOX=y
+BR2_PACKAGE_BUSYBOX=y
 BR2_PACKAGE_HOSTAPD=y
 BR2_PACKAGE_DNSMASQ=y
 BR2_PACKAGE_IFUPDOWN_SCRIPTS=y
 BR2_PACKAGE_NETIFRC=y
+
+# Disable systemd completely
+BR2_INIT_SYSTEMD=n
+BR2_PACKAGE_SYSTEMD=n
 
 # Python runtime
 BR2_PACKAGE_PYTHON3=y
@@ -204,10 +209,13 @@ EOF
     make raspberrypi0_defconfig
   fi
   
-  # Clean any existing udev configuration that might conflict
+  # Clean any existing udev and systemd configuration that might conflict
   print_step "Pulisco configurazioni conflittuali"
   sed -i '/BR2_PACKAGE_UDEV/d' .config
   sed -i '/BR2_PACKAGE_EUDEV/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD/d' .config
+  sed -i '/BR2_INIT_SYSTEMD/d' .config
+  sed -i '/BR2_PACKAGE_SYSTEMD_LOGIND/d' .config
 
   # Register external tree and append our fragment
   print_step "Configuro external tree e overlay"
