@@ -238,23 +238,28 @@ EOF
     make raspberrypi0_defconfig
   fi
   
-  # Clean any existing udev configuration that might conflict
+  # Clean any existing udev and init system configuration that might conflict
   print_step "Pulisco configurazioni conflittuali"
   sed -i '/BR2_PACKAGE_UDEV/d' .config
   sed -i '/BR2_PACKAGE_EUDEV/d' .config
+  sed -i '/BR2_INIT_BUSYBOX/d' .config
+  sed -i '/BR2_SYSTEM_BIN_SH_BUSYBOX/d' .config
+  sed -i '/BR2_PACKAGE_BUSYBOX/d' .config
 
   # Register external tree and append our fragment
   print_step "Configuro external tree e overlay"
   printf "BR2_EXTERNAL=%s\n" "${BOARD_DIR}" >> .config
 
-  # Configure systemd as init system
-  print_step "Configuro systemd come init system"
+  # Force systemd as init system
+  print_step "Forzo systemd come init system"
   echo "BR2_INIT_SYSTEMD=y" >> .config
+  echo "BR2_INIT_BUSYBOX=n" >> .config
   echo "BR2_PACKAGE_SYSTEMD=y" >> .config
   echo "BR2_PACKAGE_SYSTEMD_UTILS=y" >> .config
   echo "BR2_PACKAGE_SYSTEMD_NETWORKD=y" >> .config
   echo "BR2_PACKAGE_SYSTEMD_RESOLVED=y" >> .config
   echo "BR2_PACKAGE_SYSTEMD_TIMESYNCD=y" >> .config
+  echo "BR2_SYSTEM_BIN_SH_BASH=y" >> .config
 
   # Append our fragment values to .config directly
   print_step "Aggiungo configurazioni VaultUSB"
