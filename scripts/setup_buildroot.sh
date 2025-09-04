@@ -51,19 +51,34 @@ main() {
     --exclude "__pycache__/" --exclude "*.pyc" --exclude ".venv/" --exclude "venv/" \
     "${WORKDIR}/" "${OVERLAY_DIR}/opt/vaultusb/"
 
-  # Install systemd unit files
-  if [ -f "${WORKDIR}/systemd/vaultusb.service" ]; then
-    cp "${WORKDIR}/systemd/vaultusb.service" "${OVERLAY_DIR}/etc/systemd/system/vaultusb.service"
-  fi
-  if [ -f "${WORKDIR}/systemd/hostapd.service" ]; then
-    cp "${WORKDIR}/systemd/hostapd.service" "${OVERLAY_DIR}/etc/systemd/system/hostapd.service"
-  fi
-  if [ -f "${WORKDIR}/systemd/dnsmasq@.service" ]; then
-    cp "${WORKDIR}/systemd/dnsmasq@.service" "${OVERLAY_DIR}/etc/systemd/system/dnsmasq@.service"
-  fi
-  if [ -f "${WORKDIR}/systemd/uap0-setup.service" ]; then
-    cp "${WORKDIR}/systemd/uap0-setup.service" "${OVERLAY_DIR}/etc/systemd/system/uap0-setup.service"
-  fi
+  # Create init scripts instead of systemd services
+  mkdir -p "${OVERLAY_DIR}/etc/init.d"
+  
+  # VaultUSB init script
+  cat > "${OVERLAY_DIR}/etc/init.d/S99vaultusb" << 'EOF'
+#!/bin/sh
+case "$1" in
+  start)
+    echo "Starting VaultUSB..."
+    /usr/local/sbin/vaultusb-firstboot.sh
+    start-stop-daemon --start --quiet --pidfile /var/run/vaultusb.pid --make-pidfile --background --exec /opt/vaultusb/venv/bin/uvicorn -- app.main:app --host 0.0.0.0 --port 8000
+    ;;
+  stop)
+    echo "Stopping VaultUSB..."
+    start-stop-daemon --stop --quiet --pidfile /var/run/vaultusb.pid
+    ;;
+  restart)
+    $0 stop
+    $0 start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}"
+    exit 1
+    ;;
+esac
+exit 0
+EOF
+  chmod +x "${OVERLAY_DIR}/etc/init.d/S99vaultusb"
 
   # Seed minimal network configs (reusing repo configs if present)
   if [ -f "${WORKDIR}/networking/dnsmasq-uap0.conf" ]; then
@@ -101,31 +116,33 @@ if ! id -u vaultusb >/dev/null 2>&1; then
   chown -R vaultusb:vaultusb "${APP_DIR}"
 fi
 
-# Enable services
-systemctl enable vaultusb.service || true
-systemctl enable uap0-setup.service || true
-systemctl enable hostapd.service || true
-systemctl enable dnsmasq@uap0.service || true
-
-systemctl daemon-reload || true
+# Enable services (init scripts are already enabled by default)
+echo "VaultUSB services will start automatically on boot"
 EOF
   chmod +x "${OVERLAY_DIR}/usr/local/sbin/vaultusb-firstboot.sh"
 
-  # Systemd unit to run first-boot provisioning
-  cat > "${OVERLAY_DIR}/etc/systemd/system/vaultusb-firstboot.service" << 'EOF'
-[Unit]
-Description=VaultUSB First Boot Provisioning
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/vaultusb-firstboot.sh
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
+  # Init script to run first-boot provisioning
+  cat > "${OVERLAY_DIR}/etc/init.d/S98vaultusb-firstboot" << 'EOF'
+#!/bin/sh
+case "$1" in
+  start)
+    echo "Running VaultUSB first-boot provisioning..."
+    /usr/local/sbin/vaultusb-firstboot.sh
+    ;;
+  stop)
+    ;;
+  restart)
+    $0 stop
+    $0 start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}"
+    exit 1
+    ;;
+esac
+exit 0
 EOF
+  chmod +x "${OVERLAY_DIR}/etc/init.d/S98vaultusb-firstboot"
 
   # Create BR external tree to register overlay and options
   mkdir -p "${BOARD_DIR}"
@@ -156,18 +173,12 @@ BR2_ARM_EABIHF=y
 # Base defconfig for Raspberry Pi Zero W is raspberrypi0w_defconfig in newer BR, raspberrypi0_defconfig otherwise
 # We'll start from raspberrypi0_defconfig in the script below and then apply these fragments via defconfig append
 
-# Systemd
-BR2_INIT_SYSTEMD=y
-BR2_PACKAGE_SYSTEMD=y
-BR2_PACKAGE_SYSTEMD_JOURNAL_GATEWAY=y
-BR2_PACKAGE_SYSTEMD_NETWORKD=y
+# Use BusyBox init instead of systemd (simpler for embedded)
+BR2_INIT_BUSYBOX=y
 BR2_PACKAGE_HOSTAPD=y
 BR2_PACKAGE_DNSMASQ=y
-
-# Disable udev when using systemd (systemd includes udev)
-BR2_PACKAGE_UDEV=n
-BR2_PACKAGE_EUDEV=n
-BR2_PACKAGE_SYSTEMD_LOGIND=y
+BR2_PACKAGE_IFUPDOWN_SCRIPTS=y
+BR2_PACKAGE_NETIFRC=y
 
 # Python runtime
 BR2_PACKAGE_PYTHON3=y
@@ -193,13 +204,10 @@ EOF
     make raspberrypi0_defconfig
   fi
   
-  # Clean any existing udev and systemd configuration that might conflict
+  # Clean any existing udev configuration that might conflict
   print_step "Pulisco configurazioni conflittuali"
   sed -i '/BR2_PACKAGE_UDEV/d' .config
   sed -i '/BR2_PACKAGE_EUDEV/d' .config
-  sed -i '/BR2_PACKAGE_SYSTEMD_LOGIND/d' .config
-  sed -i '/BR2_PACKAGE_SYSTEMD/d' .config
-  sed -i '/BR2_INIT_SYSTEMD/d' .config
 
   # Register external tree and append our fragment
   print_step "Configuro external tree e overlay"
