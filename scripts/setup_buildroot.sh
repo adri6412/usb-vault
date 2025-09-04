@@ -166,6 +166,8 @@ BR2_PACKAGE_DNSMASQ=y
 
 # Disable udev when using systemd (systemd includes udev)
 BR2_PACKAGE_UDEV=n
+BR2_PACKAGE_EUDEV=n
+BR2_PACKAGE_SYSTEMD_LOGIND=y
 
 # Python runtime
 BR2_PACKAGE_PYTHON3=y
