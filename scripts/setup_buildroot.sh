@@ -98,7 +98,7 @@ EOF
     # Build Docker image and extract binary
     cd "${BUILD_DIR}"
     mkdir -p output
-    docker build --platform linux/arm64 -t vaultusb-arm .
+    docker build --platform linux/arm64 -t vaultusb-arm -f Dockerfile .
     docker run --platform linux/arm64 --rm -v "${BUILD_DIR}/output:/output" vaultusb-arm
     
     # Copy the compiled binary to overlay
