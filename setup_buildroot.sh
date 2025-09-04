@@ -59,7 +59,7 @@ main() {
     
     # Create Dockerfile for ARM compilation with QEMU
     cat > "${BUILD_DIR}/Dockerfile" << 'EOF'
-FROM --platform=linux/arm/v7 python:3.11-slim
+FROM --platform=linux/arm/v6 python:3.11-slim
 
 WORKDIR /app
 
@@ -102,8 +102,8 @@ EOF
     # Build Docker image and extract binary
     cd "${BUILD_DIR}"
     mkdir -p output
-    docker build --platform linux/arm/v7 -t vaultusb-arm -f Dockerfile .
-    docker run --platform linux/arm/v7 --rm -v "${BUILD_DIR}/output:/output" vaultusb-arm
+    docker build --platform linux/arm/v6 -t vaultusb-arm -f Dockerfile .
+    docker run --platform linux/arm/v6 --rm -v "${BUILD_DIR}/output:/output" vaultusb-arm
     
     # Copy the compiled binary to overlay
     cp output/usr/local/bin/vaultusb "${OVERLAY_DIR}/usr/local/bin/vaultusb"
