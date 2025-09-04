@@ -192,6 +192,11 @@ EOF
   else
     make raspberrypi0_defconfig
   fi
+  
+  # Clean any existing udev configuration that might conflict
+  print_step "Pulisco configurazioni udev conflittuali"
+  sed -i '/BR2_PACKAGE_UDEV/d' .config
+  sed -i '/BR2_PACKAGE_EUDEV/d' .config
 
   # Register external tree and append our fragment
   print_step "Configuro external tree e overlay"
