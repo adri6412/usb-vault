@@ -41,13 +41,33 @@ main() {
   
   # Copy our custom defconfig to Buildroot
   print_step "Copio defconfig personalizzato"
+  echo "DEBUG: BOARD_DIR = ${BOARD_DIR}"
+  echo "DEBUG: BR_DIR = ${BR_DIR}"
+  echo "DEBUG: Defconfig source = ${BOARD_DIR}/configs/raspberrypi0_vaultusb_defconfig"
+  echo "DEBUG: Defconfig destination = ${BR_DIR}/configs/"
+  
+  if [ -f "${BOARD_DIR}/configs/raspberrypi0_vaultusb_defconfig" ]; then
+    echo "✓ Defconfig sorgente trovato"
+    ls -la "${BOARD_DIR}/configs/raspberrypi0_vaultusb_defconfig"
+  else
+    echo "✗ ERRORE: Defconfig sorgente non trovato"
+    echo "Contenuto di ${BOARD_DIR}/configs/:"
+    ls -la "${BOARD_DIR}/configs/" || echo "Directory non esiste"
+    exit 1
+  fi
+  
+  echo "DEBUG: Copio defconfig..."
   cp "${BOARD_DIR}/configs/raspberrypi0_vaultusb_defconfig" "${BR_DIR}/configs/"
   
   # Verify defconfig was copied
   if [ -f "${BR_DIR}/configs/raspberrypi0_vaultusb_defconfig" ]; then
     echo "✓ Defconfig copiato correttamente"
+    echo "Contenuto di ${BR_DIR}/configs/:"
+    ls -la "${BR_DIR}/configs/" | grep vaultusb
   else
-    echo "✗ ERRORE: Defconfig non trovato"
+    echo "✗ ERRORE: Defconfig non copiato"
+    echo "Contenuto di ${BR_DIR}/configs/:"
+    ls -la "${BR_DIR}/configs/" || echo "Directory non esiste"
     exit 1
   fi
 
@@ -246,7 +266,14 @@ EOF
   cd "${BR_DIR}"
 
   print_step "Applico defconfig personalizzato VaultUSB"
+  echo "DEBUG: Directory corrente: $(pwd)"
+  echo "DEBUG: Defconfig disponibili:"
+  ls -la configs/ | grep vaultusb || echo "Nessun defconfig vaultusb trovato"
+  echo "DEBUG: Applico defconfig..."
   make raspberrypi0_vaultusb_defconfig
+  echo "DEBUG: Defconfig applicato, verifico configurazione systemd:"
+  grep -i "BR2_INIT_SYSTEMD" .config || echo "BR2_INIT_SYSTEMD non trovato"
+  grep -i "BR2_INIT_BUSYBOX" .config || echo "BR2_INIT_BUSYBOX non trovato"
   
   # Register external tree
   print_step "Configuro external tree"
