@@ -45,9 +45,9 @@ main() {
   mkdir -p "${OVERLAY_DIR}/usr/local/sbin"
   mkdir -p "${OVERLAY_DIR}/boot"
 
-  # Build PyInstaller binaries for ARM
-  print_step "Compilo VaultUSB con PyInstaller per ARM"
-  if command -v python3 >/dev/null 2>&1; then
+  # Build PyInstaller binaries for ARM using Docker
+  print_step "Compilo VaultUSB con PyInstaller per ARM usando Docker"
+  if command -v docker >/dev/null 2>&1; then
     # Create temporary build environment
     BUILD_DIR="${WORKDIR}/build_arm"
     mkdir -p "${BUILD_DIR}"
@@ -57,35 +57,61 @@ main() {
       --exclude "__pycache__/" --exclude "*.pyc" --exclude ".venv/" --exclude "venv/" \
       "${WORKDIR}/" "${BUILD_DIR}/"
     
+    # Create Dockerfile for ARM compilation
+    cat > "${BUILD_DIR}/Dockerfile" << 'EOF'
+FROM --platform=linux/arm64 python:3.11-slim
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir pyinstaller
+
+# Copy source code
+COPY . .
+
+# Build with PyInstaller
+RUN pyinstaller --onefile --name vaultusb \
+    --add-data "app:app" \
+    --add-data "templates:templates" \
+    --add-data "static:static" \
+    --hidden-import uvicorn \
+    --hidden-import fastapi \
+    --hidden-import jinja2 \
+    app/main.py
+
+# Copy static files
+RUN mkdir -p /output/opt/vaultusb
+RUN cp -r templates /output/opt/vaultusb/
+RUN cp -r static /output/opt/vaultusb/
+RUN cp dist/vaultusb /output/usr/local/bin/vaultusb
+RUN chmod +x /output/usr/local/bin/vaultusb
+EOF
+
+    # Build Docker image and extract binary
     cd "${BUILD_DIR}"
-    
-    # Install PyInstaller and build
-    python3 -m pip install --user pyinstaller
-    python3 -m pip install --user -r requirements.txt
-    
-    # Build the main application
-    python3 -m PyInstaller --onefile --name vaultusb \
-      --add-data "app:app" \
-      --add-data "templates:templates" \
-      --add-data "static:static" \
-      --hidden-import uvicorn \
-      --hidden-import fastapi \
-      --hidden-import jinja2 \
-      app/main.py
+    docker build --platform linux/arm64 -t vaultusb-arm .
+    docker run --platform linux/arm64 --rm -v "${BUILD_DIR}/output:/output" vaultusb-arm
     
     # Copy the compiled binary to overlay
-    cp dist/vaultusb "${OVERLAY_DIR}/usr/local/bin/vaultusb"
+    cp output/usr/local/bin/vaultusb "${OVERLAY_DIR}/usr/local/bin/vaultusb"
     chmod +x "${OVERLAY_DIR}/usr/local/bin/vaultusb"
     
     # Copy static files and templates
     mkdir -p "${OVERLAY_DIR}/opt/vaultusb"
-    cp -r templates "${OVERLAY_DIR}/opt/vaultusb/"
-    cp -r static "${OVERLAY_DIR}/opt/vaultusb/"
+    cp -r output/opt/vaultusb/* "${OVERLAY_DIR}/opt/vaultusb/"
     
     cd "${WORKDIR}"
     rm -rf "${BUILD_DIR}"
   else
-    print_step "Python3 non trovato, copio sorgenti Python (richiede venv al runtime)"
+    print_step "Docker non trovato, copio sorgenti Python (richiede venv al runtime)"
     rsync -a --delete --exclude "third_party/" --exclude ".git/" --exclude "output/" \
       --exclude "__pycache__/" --exclude "*.pyc" --exclude ".venv/" --exclude "venv/" \
       "${WORKDIR}/" "${OVERLAY_DIR}/opt/vaultusb/"
