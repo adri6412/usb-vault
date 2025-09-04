@@ -57,14 +57,15 @@ main() {
       --exclude "__pycache__/" --exclude "*.pyc" --exclude ".venv/" --exclude "venv/" \
       "${WORKDIR}/" "${BUILD_DIR}/"
     
-    # Create Dockerfile for ARM compilation
+    # Create Dockerfile for ARM compilation with QEMU
     cat > "${BUILD_DIR}/Dockerfile" << 'EOF'
-FROM python:3.11-slim
+FROM --platform=linux/arm64 python:3.11-slim
 
 WORKDIR /app
 
-# Install build dependencies
+# Install QEMU for ARM emulation
 RUN apt-get update && apt-get install -y \
+    qemu-user-static \
     gcc \
     g++ \
     && rm -rf /var/lib/apt/lists/*
@@ -98,8 +99,8 @@ EOF
     # Build Docker image and extract binary
     cd "${BUILD_DIR}"
     mkdir -p output
-    docker build -t vaultusb-arm -f Dockerfile .
-    docker run --rm -v "${BUILD_DIR}/output:/output" vaultusb-arm
+    docker build --platform linux/arm64 -t vaultusb-arm -f Dockerfile .
+    docker run --platform linux/arm64 --rm -v "${BUILD_DIR}/output:/output" vaultusb-arm
     
     # Copy the compiled binary to overlay
     cp output/usr/local/bin/vaultusb "${OVERLAY_DIR}/usr/local/bin/vaultusb"
