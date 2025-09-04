@@ -45,85 +45,22 @@ main() {
   mkdir -p "${OVERLAY_DIR}/usr/local/sbin"
   mkdir -p "${OVERLAY_DIR}/boot"
 
-  # Build C application for ARM using Docker
-  print_step "Compilo VaultUSB in C per ARM usando Docker"
-  if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-    # Create temporary build environment
-    BUILD_DIR="${WORKDIR}/build_arm"
-    mkdir -p "${BUILD_DIR}"
-    
-    # Copy source files
-    rsync -a --exclude "third_party/" --exclude ".git/" --exclude "output/" \
-      --exclude "__pycache__/" --exclude "*.pyc" --exclude ".venv/" --exclude "venv/" \
-      "${WORKDIR}/" "${BUILD_DIR}/"
-    
-    # Create Dockerfile for ARM compilation with QEMU
-    cat > "${BUILD_DIR}/Dockerfile" << 'EOF'
-FROM --platform=linux/arm/v6 debian:bookworm-slim
-
-WORKDIR /app
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    make \
-    libssl-dev \
-    libsqlite3-dev \
-    libjansson-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy source code
-COPY src/ ./src/
-
-# Build C application
-WORKDIR /app/src
-RUN make
-
-# Copy binary and create directories
-RUN mkdir -p /output/usr/local/bin
-RUN mkdir -p /output/opt/vaultusb
-RUN cp vaultusb /output/usr/local/bin/
-RUN chmod +x /output/usr/local/bin/vaultusb
-RUN touch /output/opt/vaultusb/vault.db
-RUN chmod 666 /output/opt/vaultusb/vault.db
-EOF
-
-    # Setup QEMU for ARM emulation
-    print_step "Configuro QEMU per emulazione ARM"
-    docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
-    
-    # Build Docker image and extract binary
-    cd "${BUILD_DIR}"
-    mkdir -p output
-    docker build --platform linux/arm/v6 -t vaultusb-arm -f Dockerfile .
-    docker run --platform linux/arm/v6 --rm -v "${BUILD_DIR}/output:/output" vaultusb-arm
-    
-    # Copy the compiled binary to overlay
-    cp output/usr/local/bin/vaultusb "${OVERLAY_DIR}/usr/local/bin/vaultusb"
-    chmod +x "${OVERLAY_DIR}/usr/local/bin/vaultusb"
-    
-    # Copy database file
-    mkdir -p "${OVERLAY_DIR}/opt/vaultusb"
-    cp output/opt/vaultusb/vault.db "${OVERLAY_DIR}/opt/vaultusb/"
-    
-    cd "${WORKDIR}"
-    rm -rf "${BUILD_DIR}"
-  else
-    print_step "Docker non trovato, compilo localmente"
-    if command -v gcc >/dev/null 2>&1; then
-      cd src
-      make
-      cp vaultusb "${OVERLAY_DIR}/usr/local/bin/vaultusb"
-      chmod +x "${OVERLAY_DIR}/usr/local/bin/vaultusb"
-      mkdir -p "${OVERLAY_DIR}/opt/vaultusb"
-      touch "${OVERLAY_DIR}/opt/vaultusb/vault.db"
-      chmod 666 "${OVERLAY_DIR}/opt/vaultusb/vault.db"
-      cd ..
-    else
-      print_step "GCC non trovato, copio sorgenti C"
-      mkdir -p "${OVERLAY_DIR}/src"
-      cp -r src/* "${OVERLAY_DIR}/src/"
-    fi
+  # Build C++ server (cross-compiled by Buildroot toolchain at BR time)
+  print_step "Preparo overlay per server C++"
+  mkdir -p "${OVERLAY_DIR}/usr/local/bin"
+  mkdir -p "${OVERLAY_DIR}/opt/vaultusb"
+  
+  # Copy templates and static files
+  if [ -d "${WORKDIR}/app/templates" ]; then
+    cp -r "${WORKDIR}/app/templates" "${OVERLAY_DIR}/opt/vaultusb/" 2>/dev/null || true
+  fi
+  if [ -d "${WORKDIR}/app/static" ]; then
+    cp -r "${WORKDIR}/app/static" "${OVERLAY_DIR}/opt/vaultusb/" 2>/dev/null || true
+  fi
+  
+  # Copy configuration files
+  if [ -f "${WORKDIR}/config.toml" ]; then
+    cp "${WORKDIR}/config.toml" "${OVERLAY_DIR}/opt/vaultusb/" 2>/dev/null || true
   fi
 
   # Create init scripts instead of systemd services
@@ -134,9 +71,9 @@ EOF
 #!/bin/sh
 case "$1" in
   start)
-    echo "Starting VaultUSB..."
+    echo "Starting VaultUSB C++ server..."
     /usr/local/sbin/vaultusb-firstboot.sh
-    start-stop-daemon --start --quiet --pidfile /var/run/vaultusb.pid --make-pidfile --background --exec /usr/local/bin/vaultusb
+    start-stop-daemon --start --quiet --pidfile /var/run/vaultusb.pid --make-pidfile --background --exec /usr/local/bin/vaultusb_cpp -- --port 8000 --config /opt/vaultusb/config.toml
     ;;
   stop)
     echo "Stopping VaultUSB..."
@@ -175,19 +112,10 @@ APP_DIR="/opt/vaultusb"
 
 log() { echo "[vaultusb-firstboot] $*"; }
 
-# Check if we have PyInstaller binary or need to create venv
-if [ -f "/usr/local/bin/vaultusb" ]; then
-  log "Using PyInstaller binary - no venv needed"
-else
-  log "Creating Python venv and installing requirements"
-  VENV_DIR="${APP_DIR}/venv"
-  if [ ! -d "${VENV_DIR}" ]; then
-    python3 -m venv "${VENV_DIR}"
-    "${VENV_DIR}/bin/pip" install --upgrade pip wheel setuptools
-    if [ -f "${APP_DIR}/requirements.txt" ]; then
-      "${VENV_DIR}/bin/pip" install -r "${APP_DIR}/requirements.txt"
-    fi
-  fi
+# C++ binary is shipped by Buildroot package as /usr/local/bin/vaultusb_cpp
+if [ ! -x "/usr/local/bin/vaultusb_cpp" ]; then
+  log "vaultusb_cpp non trovato, verificare pacchetto Buildroot"
+  exit 1
 fi
 
 # Ensure user exists
@@ -196,8 +124,17 @@ if ! id -u vaultusb >/dev/null 2>&1; then
   chown -R vaultusb:vaultusb "${APP_DIR}"
 fi
 
+# Create vault directory
+mkdir -p "${APP_DIR}/vault"
+chown vaultusb:vaultusb "${APP_DIR}/vault"
+chmod 700 "${APP_DIR}/vault"
+
+# Set up database directory
+mkdir -p "$(dirname "${APP_DIR}/vault.db")"
+chown vaultusb:vaultusb "$(dirname "${APP_DIR}/vault.db")"
+
 # Enable services (init scripts are already enabled by default)
-echo "VaultUSB services will start automatically on boot"
+echo "VaultUSB C++ services will start automatically on boot"
 EOF
   chmod +x "${OVERLAY_DIR}/usr/local/sbin/vaultusb-firstboot.sh"
 
@@ -227,19 +164,16 @@ EOF
   # Create BR external tree to register overlay and options
   mkdir -p "${BOARD_DIR}"
   cat > "${BOARD_DIR}/Config.in" << 'EOF'
-config BR2_PACKAGE_VAULTUSB
-    bool "vaultusb overlay"
-    help
-      Installa l'overlay di VaultUSB nel rootfs.
+source "$BR2_EXTERNAL_VAULTUSB_PATH/package/vaultusb-cpp/Config.in"
 EOF
 
   cat > "${BOARD_DIR}/external.desc" << 'EOF'
 name: VAULTUSB
-desc: External BR tree for VaultUSB overlay and config
+desc: External BR tree for VaultUSB C++ application and config
 EOF
 
   cat > "${BOARD_DIR}/external.mk" << 'EOF'
-# Empty: overlay handled via BR2_ROOTFS_OVERLAY in defconfig fragment
+# Hook to include our package directory
 EOF
 
   # Create defconfig fragment enabling systemd and overlay
@@ -265,13 +199,30 @@ BR2_PACKAGE_NETIFRC=y
 BR2_INIT_SYSTEMD=n
 BR2_PACKAGE_SYSTEMD=n
 
-# C runtime dependencies
-BR2_PACKAGE_OPENSSL=y
+# C++ runtime and libraries
+BR2_TOOLCHAIN_BUILDROOT_CXX=y
+BR2_PACKAGE_LIBSTDCPP=y
+
+# SQLite3 for database
 BR2_PACKAGE_SQLITE=y
-BR2_PACKAGE_JANSSON=y
+
+# OpenSSL for crypto operations
+BR2_PACKAGE_OPENSSL=y
+BR2_PACKAGE_OPENSSL_BIN=y
+
+# Argon2 for password hashing
+BR2_PACKAGE_LIBARGON2=y
+
+# Additional utilities
+BR2_PACKAGE_UTIL_LINUX=y
+BR2_PACKAGE_UTIL_LINUX_LIBUUID=y
+BR2_PACKAGE_UTIL_LINUX_LIBBLKID=y
 
 # Rootfs overlay
 BR2_ROOTFS_OVERLAY="${OVERLAY_DIR}"
+
+# Enable VaultUSB C++ package
+BR2_PACKAGE_VAULTUSB_CPP=y
 
 # Enable systemd service at boot
 BR2_SYSTEM_DHCP="eth0"
