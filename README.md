@@ -68,6 +68,15 @@ curl -sSL https://raw.githubusercontent.com/adri6412/usb-vault/main/scripts/inst
 curl -sSL https://raw.githubusercontent.com/adri6412/usb-vault/main/scripts/install_raspbian.sh | bash
 ```
 
+#### For Custom Buildroot (Advanced):
+```bash
+# Create a custom minimal Linux system with Buildroot
+git clone https://github.com/adri6412/usb-vault.git
+cd usb-vault
+chmod +x scripts/setup_buildroot.sh
+./scripts/setup_buildroot.sh
+```
+
 ### Manual Installation
 
 #### Option A: DietPi Bookworm
@@ -105,6 +114,57 @@ curl -sSL https://raw.githubusercontent.com/adri6412/usb-vault/main/scripts/inst
    - Configure Wi-Fi (optional)
    - Enable USB gadget mode
    - Update system packages
+
+#### Option C: Custom Buildroot System
+
+1. **Prerequisites**
+   - Linux development machine (Ubuntu 20.04+ recommended)
+   - At least 8GB free disk space
+   - Build tools (automatically installed by script)
+
+2. **Setup Buildroot Environment**
+   ```bash
+   # Clone VaultUSB repository
+   git clone https://github.com/adri6412/usb-vault.git
+   cd usb-vault
+   
+   # Run Buildroot setup script
+   chmod +x scripts/setup_buildroot.sh
+   ./scripts/setup_buildroot.sh
+   ```
+
+3. **Build Custom System**
+   ```bash
+   # Navigate to Buildroot directory
+   cd buildroot_workspace/buildroot-2024.02.6
+   
+   # Set external path
+   export BR2_EXTERNAL="../br2-external-vaultusb"
+   
+   # Load VaultUSB configuration
+   make vaultusb_rpi0w_defconfig
+   
+   # Optional: Customize configuration
+   make menuconfig
+   
+   # Build system (takes 1-2 hours)
+   make -j$(nproc)
+   ```
+
+4. **Flash Custom Image**
+   ```bash
+   # Flash the generated image to SD card
+   sudo dd if=output/images/sdcard.img of=/dev/sdX bs=4M status=progress
+   sync
+   ```
+   
+   Where `/dev/sdX` is your SD card device.
+
+5. **Boot and Access**
+   - Insert SD card into Raspberry Pi Zero W
+   - Connect USB cable (data + power)
+   - Wait for boot (LED activity stops)
+   - Access via http://192.168.3.1
 
 ### 3. Boot and Connect
 
@@ -397,6 +457,18 @@ For support and questions:
 - Enhanced resource allocation
 - Python 3.11 compatibility
 
+### Custom Buildroot Integration
+- Ultra-minimal Linux system (512MB image)
+- Optimized for Raspberry Pi Zero W first model
+- Custom kernel with USB gadget support
+- Built-in VaultUSB application
+- Systemd-based init system
+- Pre-configured networking and services
+- Minimal attack surface and resource usage
+- Fast boot time (under 30 seconds)
+- Read-only root filesystem option
+- Custom hardware support (GPIO, SPI, I2C)
+
 ### OS-Specific Commands
 
 #### DietPi Bookworm:
@@ -429,6 +501,30 @@ raspi-config
 cat /etc/os-release | grep VERSION
 ```
 
+#### Custom Buildroot:
+```bash
+# Check VaultUSB status
+systemctl status vaultusb
+
+# Check USB gadget status
+systemctl status usb-gadget
+
+# View system information
+uname -a
+
+# Check build info
+cat /etc/os-release
+
+# Monitor system resources
+htop
+
+# Check network interfaces
+ip addr show
+
+# View logs
+journalctl -u vaultusb -f
+```
+
 ### OS-Specific Optimizations
 
 #### DietPi Bookworm:
@@ -442,6 +538,16 @@ cat /etc/os-release | grep VERSION
 - Full Python 3.11 support
 - Desktop environment integration
 - Raspberry Pi specific optimizations
+
+#### Custom Buildroot:
+- Ultra-lightweight system (64MB RAM minimum)
+- Custom-compiled Python 3.11 with minimal modules
+- No package manager overhead
+- Direct hardware access optimizations
+- Compile-time security hardening
+- Minimal filesystem with only essential components
+- Custom init system for faster boot
+- Optimized for single-purpose operation
 
 ## Changelog
 
