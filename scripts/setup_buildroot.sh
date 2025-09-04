@@ -193,7 +193,7 @@ EOF
   printf "BR2_EXTERNAL=%s\n" "${BOARD_DIR}" >> .config
 
   # Append our fragment values to .config safely
-  scripts/kconfig/merge_config.sh -m .config "${BOARD_DIR}/configs/raspberrypi0_vaultusb_defconfig" || true
+  "${BR_DIR}/scripts/kconfig/merge_config.sh" -m .config "${BOARD_DIR}/configs/raspberrypi0_vaultusb_defconfig" || true
 
   print_step "Avvio build immagine (questo richiede tempo)"
   make -j"$(nproc)" || make
