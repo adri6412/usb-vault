@@ -45,11 +45,51 @@ main() {
   mkdir -p "${OVERLAY_DIR}/usr/local/sbin"
   mkdir -p "${OVERLAY_DIR}/boot"
 
-  # Copy application files into overlay
-  print_step "Copia dei sorgenti VaultUSB nell'overlay"
-  rsync -a --delete --exclude "third_party/" --exclude ".git/" --exclude "output/" \
-    --exclude "__pycache__/" --exclude "*.pyc" --exclude ".venv/" --exclude "venv/" \
-    "${WORKDIR}/" "${OVERLAY_DIR}/opt/vaultusb/"
+  # Build PyInstaller binaries for ARM
+  print_step "Compilo VaultUSB con PyInstaller per ARM"
+  if command -v python3 >/dev/null 2>&1; then
+    # Create temporary build environment
+    BUILD_DIR="${WORKDIR}/build_arm"
+    mkdir -p "${BUILD_DIR}"
+    
+    # Copy source files
+    rsync -a --exclude "third_party/" --exclude ".git/" --exclude "output/" \
+      --exclude "__pycache__/" --exclude "*.pyc" --exclude ".venv/" --exclude "venv/" \
+      "${WORKDIR}/" "${BUILD_DIR}/"
+    
+    cd "${BUILD_DIR}"
+    
+    # Install PyInstaller and build
+    python3 -m pip install --user pyinstaller
+    python3 -m pip install --user -r requirements.txt
+    
+    # Build the main application
+    python3 -m PyInstaller --onefile --name vaultusb \
+      --add-data "app:app" \
+      --add-data "templates:templates" \
+      --add-data "static:static" \
+      --hidden-import uvicorn \
+      --hidden-import fastapi \
+      --hidden-import jinja2 \
+      app/main.py
+    
+    # Copy the compiled binary to overlay
+    cp dist/vaultusb "${OVERLAY_DIR}/usr/local/bin/vaultusb"
+    chmod +x "${OVERLAY_DIR}/usr/local/bin/vaultusb"
+    
+    # Copy static files and templates
+    mkdir -p "${OVERLAY_DIR}/opt/vaultusb"
+    cp -r templates "${OVERLAY_DIR}/opt/vaultusb/"
+    cp -r static "${OVERLAY_DIR}/opt/vaultusb/"
+    
+    cd "${WORKDIR}"
+    rm -rf "${BUILD_DIR}"
+  else
+    print_step "Python3 non trovato, copio sorgenti Python (richiede venv al runtime)"
+    rsync -a --delete --exclude "third_party/" --exclude ".git/" --exclude "output/" \
+      --exclude "__pycache__/" --exclude "*.pyc" --exclude ".venv/" --exclude "venv/" \
+      "${WORKDIR}/" "${OVERLAY_DIR}/opt/vaultusb/"
+  fi
 
   # Create init scripts instead of systemd services
   mkdir -p "${OVERLAY_DIR}/etc/init.d"
@@ -61,7 +101,7 @@ case "$1" in
   start)
     echo "Starting VaultUSB..."
     /usr/local/sbin/vaultusb-firstboot.sh
-    start-stop-daemon --start --quiet --pidfile /var/run/vaultusb.pid --make-pidfile --background --exec /opt/vaultusb/venv/bin/uvicorn -- app.main:app --host 0.0.0.0 --port 8000
+    start-stop-daemon --start --quiet --pidfile /var/run/vaultusb.pid --make-pidfile --background --exec /usr/local/bin/vaultusb
     ;;
   stop)
     echo "Stopping VaultUSB..."
@@ -91,22 +131,27 @@ EOF
     cp "${WORKDIR}/networking/hostapd.conf" "${OVERLAY_DIR}/etc/hostapd/hostapd.conf"
   fi
 
-  # First-boot provision script to create venv and install deps
+  # First-boot provision script
   cat > "${OVERLAY_DIR}/usr/local/sbin/vaultusb-firstboot.sh" << 'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
 APP_DIR="/opt/vaultusb"
-VENV_DIR="${APP_DIR}/venv"
 
 log() { echo "[vaultusb-firstboot] $*"; }
 
-if [ ! -d "${VENV_DIR}" ]; then
+# Check if we have PyInstaller binary or need to create venv
+if [ -f "/usr/local/bin/vaultusb" ]; then
+  log "Using PyInstaller binary - no venv needed"
+else
   log "Creating Python venv and installing requirements"
-  python3 -m venv "${VENV_DIR}"
-  "${VENV_DIR}/bin/pip" install --upgrade pip wheel setuptools
-  if [ -f "${APP_DIR}/requirements.txt" ]; then
-    "${VENV_DIR}/bin/pip" install -r "${APP_DIR}/requirements.txt"
+  VENV_DIR="${APP_DIR}/venv"
+  if [ ! -d "${VENV_DIR}" ]; then
+    python3 -m venv "${VENV_DIR}"
+    "${VENV_DIR}/bin/pip" install --upgrade pip wheel setuptools
+    if [ -f "${APP_DIR}/requirements.txt" ]; then
+      "${VENV_DIR}/bin/pip" install -r "${APP_DIR}/requirements.txt"
+    fi
   fi
 fi
 
@@ -185,12 +230,9 @@ BR2_PACKAGE_NETIFRC=y
 BR2_INIT_SYSTEMD=n
 BR2_PACKAGE_SYSTEMD=n
 
-# Python runtime
+# Python runtime (minimal for PyInstaller binaries)
 BR2_PACKAGE_PYTHON3=y
-BR2_PACKAGE_PYTHON3_PIP=y
 BR2_PACKAGE_PYTHON3_SSL=y
-BR2_PACKAGE_PYTHON3_SETuptools=y
-BR2_PACKAGE_PYTHON3_WHEEL=y
 
 # Rootfs overlay
 BR2_ROOTFS_OVERLAY="${OVERLAY_DIR}"
