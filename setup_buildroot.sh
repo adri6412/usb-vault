@@ -45,85 +45,16 @@ main() {
   mkdir -p "${OVERLAY_DIR}/usr/local/sbin"
   mkdir -p "${OVERLAY_DIR}/boot"
 
-  # Build PyInstaller binaries for ARM using Docker
-  print_step "Compilo VaultUSB con PyInstaller per ARM usando Docker"
-  if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-    # Create temporary build environment
-    BUILD_DIR="${WORKDIR}/build_arm"
-    mkdir -p "${BUILD_DIR}"
-    
-    # Copy source files
-    rsync -a --exclude "third_party/" --exclude ".git/" --exclude "output/" \
-      --exclude "__pycache__/" --exclude "*.pyc" --exclude ".venv/" --exclude "venv/" \
-      "${WORKDIR}/" "${BUILD_DIR}/"
-    
-    # Create Dockerfile for ARM compilation with QEMU
-    cat > "${BUILD_DIR}/Dockerfile" << 'EOF'
-FROM --platform=linux/arm/v6 python:3.11-slim
-
-WORKDIR /app
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    libffi-dev \
-    libssl-dev \
-    python3-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements and install
-COPY requirements.txt .
-RUN pip install --upgrade pip
-RUN pip install --no-cache-dir --only-binary=all -r requirements.txt || pip install --no-cache-dir -r requirements.txt
-RUN pip install --no-cache-dir pyinstaller
-
-# Copy source code
-COPY . .
-
-# Build with PyInstaller
-RUN pyinstaller --onefile --name vaultusb \
-    --add-data "app:app" \
-    --add-data "templates:templates" \
-    --add-data "static:static" \
-    --hidden-import uvicorn \
-    --hidden-import fastapi \
-    --hidden-import jinja2 \
-    app/main.py
-
-# Copy static files
-RUN mkdir -p /output/opt/vaultusb
-RUN cp -r templates /output/opt/vaultusb/
-RUN cp -r static /output/opt/vaultusb/
-RUN cp dist/vaultusb /output/usr/local/bin/vaultusb
-RUN chmod +x /output/usr/local/bin/vaultusb
-EOF
-
-    # Setup QEMU for ARM emulation
-    print_step "Configuro QEMU per emulazione ARM"
-    docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
-    
-    # Build Docker image and extract binary
-    cd "${BUILD_DIR}"
-    mkdir -p output
-    docker build --platform linux/arm/v6 -t vaultusb-arm -f Dockerfile .
-    docker run --platform linux/arm/v6 --rm -v "${BUILD_DIR}/output:/output" vaultusb-arm
-    
-    # Copy the compiled binary to overlay
-    cp output/usr/local/bin/vaultusb "${OVERLAY_DIR}/usr/local/bin/vaultusb"
-    chmod +x "${OVERLAY_DIR}/usr/local/bin/vaultusb"
-    
-    # Copy static files and templates
-    mkdir -p "${OVERLAY_DIR}/opt/vaultusb"
-    cp -r output/opt/vaultusb/* "${OVERLAY_DIR}/opt/vaultusb/"
-    
-    cd "${WORKDIR}"
-    rm -rf "${BUILD_DIR}"
-  else
-    print_step "Docker non trovato, copio sorgenti Python (richiede venv al runtime)"
-    rsync -a --delete --exclude "third_party/" --exclude ".git/" --exclude "output/" \
-      --exclude "__pycache__/" --exclude "*.pyc" --exclude ".venv/" --exclude "venv/" \
-      "${WORKDIR}/" "${OVERLAY_DIR}/opt/vaultusb/"
+  # Build C++ server (cross-compiled by Buildroot toolchain at BR time)
+  print_step "Preparo overlay per server C++"
+  mkdir -p "${OVERLAY_DIR}/usr/local/bin"
+  mkdir -p "${OVERLAY_DIR}/opt/vaultusb"
+  # The actual C++ binary will be built inside Buildroot via a package; here we only stage assets
+  if [ -d "${WORKDIR}/app/templates" ]; then
+    cp -r "${WORKDIR}/app/templates" "${OVERLAY_DIR}/opt/vaultusb/" 2>/dev/null || true
+  fi
+  if [ -d "${WORKDIR}/app/static" ]; then
+    cp -r "${WORKDIR}/app/static" "${OVERLAY_DIR}/opt/vaultusb/" 2>/dev/null || true
   fi
 
   # Create init scripts instead of systemd services
@@ -136,7 +67,7 @@ case "$1" in
   start)
     echo "Starting VaultUSB..."
     /usr/local/sbin/vaultusb-firstboot.sh
-    start-stop-daemon --start --quiet --pidfile /var/run/vaultusb.pid --make-pidfile --background --exec /usr/local/bin/vaultusb
+    start-stop-daemon --start --quiet --pidfile /var/run/vaultusb.pid --make-pidfile --background --exec /usr/bin/vaultusb_cpp -- 8000
     ;;
   stop)
     echo "Stopping VaultUSB..."
@@ -175,19 +106,9 @@ APP_DIR="/opt/vaultusb"
 
 log() { echo "[vaultusb-firstboot] $*"; }
 
-# Check if we have PyInstaller binary or need to create venv
-if [ -f "/usr/local/bin/vaultusb" ]; then
-  log "Using PyInstaller binary - no venv needed"
-else
-  log "Creating Python venv and installing requirements"
-  VENV_DIR="${APP_DIR}/venv"
-  if [ ! -d "${VENV_DIR}" ]; then
-    python3 -m venv "${VENV_DIR}"
-    "${VENV_DIR}/bin/pip" install --upgrade pip wheel setuptools
-    if [ -f "${APP_DIR}/requirements.txt" ]; then
-      "${VENV_DIR}/bin/pip" install -r "${APP_DIR}/requirements.txt"
-    fi
-  fi
+# C++ binary is shipped by Buildroot package as /usr/local/bin/vaultusb_cpp
+if [ ! -x "/usr/bin/vaultusb_cpp" ]; then
+  log "vaultusb_cpp non trovato, verificare pacchetto Buildroot"
 fi
 
 # Ensure user exists
@@ -239,47 +160,40 @@ desc: External BR tree for VaultUSB overlay and config
 EOF
 
   cat > "${BOARD_DIR}/external.mk" << 'EOF'
-# Empty: overlay handled via BR2_ROOTFS_OVERLAY in defconfig fragment
+# Hook to include our package directory
 EOF
 
-  # Create defconfig fragment enabling systemd and overlay
+  # Create defconfig fragment enabling overlay and selecting our package
   mkdir -p "${BOARD_DIR}/configs"
   cat > "${BOARD_DIR}/configs/raspberrypi0_vaultusb_defconfig" << EOF
 BR2_arm=y
-BR2_cortex_a7=y
-BR2_ARM_FPU_VFPV3D16=y
-BR2_ARM_EABIHF=y
+BR2_arm1176jzf_s=y
 
 # Base defconfig for Raspberry Pi Zero W is raspberrypi0w_defconfig in newer BR, raspberrypi0_defconfig otherwise
 # We'll start from raspberrypi0_defconfig in the script below and then apply these fragments via defconfig append
 
-# Use BusyBox init instead of systemd (simpler for embedded)
-BR2_INIT_BUSYBOX=y
-BR2_PACKAGE_BUSYBOX=y
+# Init and base packages
 BR2_PACKAGE_HOSTAPD=y
 BR2_PACKAGE_DNSMASQ=y
 BR2_PACKAGE_IFUPDOWN_SCRIPTS=y
 BR2_PACKAGE_NETIFRC=y
 
-# Disable systemd completely
-BR2_INIT_SYSTEMD=n
-BR2_PACKAGE_SYSTEMD=n
-
-# Python runtime (minimal for PyInstaller binaries)
-BR2_PACKAGE_PYTHON3=y
-BR2_PACKAGE_PYTHON3_SSL=y
-
 # Rootfs overlay
 BR2_ROOTFS_OVERLAY="${OVERLAY_DIR}"
 
-# Enable systemd service at boot
-BR2_SYSTEM_DHCP="eth0"
+# Select our C++ package
+BR2_PACKAGE_VAULTUSB_CPP=y
+
+# Enable toolchain C++
+BR2_TOOLCHAIN_BUILDROOT_CXX=y
 EOF
 
   # Prepare Buildroot config and build
   cd "${BR_DIR}"
 
   print_step "Applico defconfig Raspberry Pi Zero"
+  export BR2_EXTERNAL="${BOARD_DIR}"
+  export BR2_EXTERNAL_VAULTUSB_PATH="${BOARD_DIR}"
   if make raspberrypi0w_defconfig >/dev/null 2>&1; then
     make raspberrypi0w_defconfig
   else
@@ -296,11 +210,15 @@ EOF
 
   # Register external tree and append our fragment
   print_step "Configuro external tree e overlay"
-  printf "BR2_EXTERNAL=%s\n" "${BOARD_DIR}" >> .config
+  # BR2_EXTERNAL already exported; ensure path var for includes
+  export BR2_EXTERNAL_VAULTUSB_PATH="${BOARD_DIR}"
 
   # Append our fragment values to .config directly
   print_step "Aggiungo configurazioni VaultUSB"
   cat "${BOARD_DIR}/configs/raspberrypi0_vaultusb_defconfig" >> .config
+
+  # Refresh Config to avoid stale options
+  make olddefconfig
 
   print_step "Avvio build immagine (questo richiede tempo)"
   make -j"$(nproc)" || make

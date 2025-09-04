@@ -1,0 +1,5 @@
+config BR2_PACKAGE_VAULTUSB_CPP
+    bool "vaultusb C++ server"
+    help
+      Minimal C++ HTTP server for VaultUSB providing basic endpoints.
+
