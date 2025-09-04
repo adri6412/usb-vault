@@ -1,0 +1,11 @@
+menu "VaultUSB"
+
+config BR2_PACKAGE_VAULTUSB
+    bool "vaultusb overlay"
+    help
+      Installa l'overlay di VaultUSB nel rootfs.
+
+source "$BR2_EXTERNAL_VAULTUSB_PATH/package/vaultusb_cpp/Config.in"
+
+endmenu
+

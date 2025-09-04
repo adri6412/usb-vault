@@ -67,7 +67,7 @@ case "$1" in
   start)
     echo "Starting VaultUSB..."
     /usr/local/sbin/vaultusb-firstboot.sh
-    start-stop-daemon --start --quiet --pidfile /var/run/vaultusb.pid --make-pidfile --background --exec /usr/local/bin/vaultusb_cpp -- 8000
+    start-stop-daemon --start --quiet --pidfile /var/run/vaultusb.pid --make-pidfile --background --exec /usr/bin/vaultusb_cpp -- 8000
     ;;
   stop)
     echo "Stopping VaultUSB..."
@@ -107,7 +107,7 @@ APP_DIR="/opt/vaultusb"
 log() { echo "[vaultusb-firstboot] $*"; }
 
 # C++ binary is shipped by Buildroot package as /usr/local/bin/vaultusb_cpp
-if [ ! -x "/usr/local/bin/vaultusb_cpp" ]; then
+if [ ! -x "/usr/bin/vaultusb_cpp" ]; then
   log "vaultusb_cpp non trovato, verificare pacchetto Buildroot"
 fi
 
@@ -163,44 +163,37 @@ EOF
 # Hook to include our package directory
 EOF
 
-  # Create defconfig fragment enabling systemd and overlay
+  # Create defconfig fragment enabling overlay and selecting our package
   mkdir -p "${BOARD_DIR}/configs"
   cat > "${BOARD_DIR}/configs/raspberrypi0_vaultusb_defconfig" << EOF
 BR2_arm=y
-BR2_cortex_a7=y
-BR2_ARM_FPU_VFPV3D16=y
-BR2_ARM_EABIHF=y
+BR2_arm1176jzf_s=y
 
 # Base defconfig for Raspberry Pi Zero W is raspberrypi0w_defconfig in newer BR, raspberrypi0_defconfig otherwise
 # We'll start from raspberrypi0_defconfig in the script below and then apply these fragments via defconfig append
 
-# Use BusyBox init instead of systemd (simpler for embedded)
-BR2_INIT_BUSYBOX=y
-BR2_PACKAGE_BUSYBOX=y
+# Init and base packages
 BR2_PACKAGE_HOSTAPD=y
 BR2_PACKAGE_DNSMASQ=y
 BR2_PACKAGE_IFUPDOWN_SCRIPTS=y
 BR2_PACKAGE_NETIFRC=y
 
-# Disable systemd completely
-BR2_INIT_SYSTEMD=n
-BR2_PACKAGE_SYSTEMD=n
-
-# Python runtime (minimal for PyInstaller binaries)
-BR2_PACKAGE_PYTHON3=y
-BR2_PACKAGE_PYTHON3_SSL=y
-
 # Rootfs overlay
 BR2_ROOTFS_OVERLAY="${OVERLAY_DIR}"
 
-# Enable systemd service at boot
-BR2_SYSTEM_DHCP="eth0"
+# Select our C++ package
+BR2_PACKAGE_VAULTUSB_CPP=y
+
+# Enable toolchain C++
+BR2_TOOLCHAIN_BUILDROOT_CXX=y
 EOF
 
   # Prepare Buildroot config and build
   cd "${BR_DIR}"
 
   print_step "Applico defconfig Raspberry Pi Zero"
+  export BR2_EXTERNAL="${BOARD_DIR}"
+  export BR2_EXTERNAL_VAULTUSB_PATH="${BOARD_DIR}"
   if make raspberrypi0w_defconfig >/dev/null 2>&1; then
     make raspberrypi0w_defconfig
   else
@@ -217,11 +210,15 @@ EOF
 
   # Register external tree and append our fragment
   print_step "Configuro external tree e overlay"
-  printf "BR2_EXTERNAL=%s\n" "${BOARD_DIR}" >> .config
+  # BR2_EXTERNAL already exported; ensure path var for includes
+  export BR2_EXTERNAL_VAULTUSB_PATH="${BOARD_DIR}"
 
   # Append our fragment values to .config directly
   print_step "Aggiungo configurazioni VaultUSB"
   cat "${BOARD_DIR}/configs/raspberrypi0_vaultusb_defconfig" >> .config
+
+  # Refresh Config to avoid stale options
+  make olddefconfig
 
   print_step "Avvio build immagine (questo richiede tempo)"
   make -j"$(nproc)" || make
