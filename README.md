@@ -68,6 +68,15 @@ curl -sSL https://raw.githubusercontent.com/adri6412/usb-vault/main/scripts/inst
 curl -sSL https://raw.githubusercontent.com/adri6412/usb-vault/main/scripts/install_raspbian.sh | bash
 ```
 
+#### For Custom Buildroot (Advanced):
+```bash
+# Create a custom minimal Linux system with Buildroot
+git clone https://github.com/adri6412/usb-vault.git
+cd usb-vault
+chmod +x scripts/setup_buildroot.sh
+./scripts/setup_buildroot.sh
+```
+
 ### Manual Installation
 
 #### Option A: DietPi Bookworm
