@@ -240,9 +240,38 @@ EOF
   print_step "Applico defconfig personalizzato VaultUSB"
   make raspberrypi0_vaultusb_defconfig
   
+  # Force systemd configuration after defconfig
+  print_step "Forzo configurazione systemd"
+  sed -i 's/BR2_INIT_BUSYBOX=y/BR2_INIT_BUSYBOX=n/' .config
+  sed -i 's/BR2_SYSTEM_BIN_SH_BUSYBOX=y/BR2_SYSTEM_BIN_SH_BUSYBOX=n/' .config
+  sed -i 's/BR2_PACKAGE_BUSYBOX=y/BR2_PACKAGE_BUSYBOX=n/' .config
+  echo "BR2_INIT_SYSTEMD=y" >> .config
+  echo "BR2_PACKAGE_SYSTEMD=y" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_UTILS=y" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_NETWORKD=y" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_RESOLVED=y" >> .config
+  echo "BR2_PACKAGE_SYSTEMD_TIMESYNCD=y" >> .config
+  echo "BR2_SYSTEM_BIN_SH_BASH=y" >> .config
+  
   # Register external tree
   print_step "Configuro external tree"
   printf "BR2_EXTERNAL=%s\n" "${BOARD_DIR}" >> .config
+
+  # Verify systemd configuration
+  print_step "Verifico configurazione systemd"
+  if grep -q "BR2_INIT_SYSTEMD=y" .config; then
+    echo "✓ Systemd abilitato"
+  else
+    echo "✗ ERRORE: Systemd non abilitato"
+    exit 1
+  fi
+  
+  if grep -q "BR2_INIT_BUSYBOX=n" .config; then
+    echo "✓ BusyBox disabilitato"
+  else
+    echo "✗ ERRORE: BusyBox ancora abilitato"
+    exit 1
+  fi
 
   # Clean and reconfigure to avoid dependency issues
   print_step "Pulisco build precedente per evitare conflitti"
