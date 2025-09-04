@@ -273,8 +273,9 @@ EOF
   print_step "Configuro external tree e overlay"
   printf "BR2_EXTERNAL=%s\n" "${BOARD_DIR}" >> .config
 
-  # Force disable systemd completely
-  print_step "Disabilito completamente systemd"
+  # Force BusyBox init system and disable systemd completely
+  print_step "Configuro BusyBox come init system"
+  echo "BR2_INIT_BUSYBOX=y" >> .config
   echo "BR2_INIT_SYSTEMD=n" >> .config
   echo "BR2_PACKAGE_SYSTEMD=n" >> .config
   echo "BR2_PACKAGE_SYSTEMD_UTILS=n" >> .config
@@ -300,6 +301,10 @@ EOF
   echo "BR2_PACKAGE_SYSTEMD_XDG_AUTOSTART=n" >> .config
   echo "BR2_PACKAGE_SYSTEMD_XORG_LAUNCH_HELPER=n" >> .config
   echo "BR2_PACKAGE_SYSTEMD_ZSH_COMPLETION=n" >> .config
+  
+  # Ensure BusyBox is properly configured
+  echo "BR2_PACKAGE_BUSYBOX=y" >> .config
+  echo "BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES=\"\"" >> .config
 
   # Append our fragment values to .config directly
   print_step "Aggiungo configurazioni VaultUSB"
