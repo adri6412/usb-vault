@@ -59,7 +59,7 @@ main() {
     
     # Create Dockerfile for ARM compilation
     cat > "${BUILD_DIR}/Dockerfile" << 'EOF'
-FROM --platform=linux/arm64 python:3.11-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -97,6 +97,7 @@ EOF
 
     # Build Docker image and extract binary
     cd "${BUILD_DIR}"
+    mkdir -p output
     docker build --platform linux/arm64 -t vaultusb-arm .
     docker run --platform linux/arm64 --rm -v "${BUILD_DIR}/output:/output" vaultusb-arm
     
