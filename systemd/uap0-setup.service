@@ -1,0 +1,17 @@
+[Unit]
+Description=Setup uap0 interface for Wi-Fi AP mode
+Before=hostapd.service
+Wants=hostapd.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'if ! ip link show uap0 >/dev/null 2>&1; then iw dev wlan0 interface add uap0 type __ap; fi'
+ExecStart=/bin/bash -c 'ip link set uap0 up'
+ExecStart=/bin/bash -c 'ip addr add 10.42.0.1/24 dev uap0'
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=uap0-setup
+
+[Install]
+WantedBy=multi-user.target

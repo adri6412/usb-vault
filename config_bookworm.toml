@@ -1,0 +1,58 @@
+[app]
+name = "VaultUSB"
+version = "1.0.0"
+debug = false
+host = "0.0.0.0"
+port = 8000
+secret_key = "vaultusb-secret-key-change-in-production"
+dietpi_version = "bookworm"
+debian_version = "bookworm"
+
+[networking]
+usb0_ip = "192.168.3.1"
+usb0_netmask = "24"
+usb0_dhcp_range = "192.168.3.100,192.168.3.200"
+uap0_ip = "10.42.0.1"
+uap0_netmask = "24"
+uap0_dhcp_range = "10.42.0.100,10.42.0.200"
+ap_ssid = "VaultUSB"
+ap_password = "ChangeMeVault!"
+
+[security]
+idle_timeout = 600  # 10 minutes in seconds
+master_key_file = "/opt/vaultusb/master.key"
+vault_dir = "/opt/vaultusb/vault"
+db_file = "/opt/vaultusb/vault.db"
+argon2_time_cost = 2  # Optimized for Bookworm
+argon2_memory_cost = 32768  # 32MB for Bookworm
+argon2_parallelism = 1
+file_key_size = 32
+
+[tls]
+enabled = false
+cert_file = "/opt/vaultusb/cert.pem"
+key_file = "/opt/vaultusb/key.pem"
+
+[system]
+sudoers_file = "/etc/sudoers.d/vaultusb"
+rpi_update_enabled = true
+dietpi_optimized = true
+
+[dietpi]
+# DietPi Bookworm specific optimizations
+version = "bookworm"
+debian_version = "bookworm"
+python_version = "3.11"
+memory_limit = 256  # MB
+cpu_limit = 50  # percentage
+log_level = "INFO"
+auto_update = false
+backup_enabled = true
+
+[bookworm]
+# Debian Bookworm specific settings
+python_path = "/usr/bin/python3"
+pip_path = "/usr/bin/pip3"
+venv_path = "/opt/vaultusb/venv"
+systemd_enabled = true
+journald_logging = true

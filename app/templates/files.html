@@ -1,0 +1,406 @@
+{% extends "base.html" %}
+
+{% block title %}Files - VaultUSB{% endblock %}
+
+{% block content %}
+<div class="files-page">
+    <div class="page-header">
+        <h2>File Manager</h2>
+        <div class="page-actions">
+            <button id="uploadBtn" class="btn btn-primary">Upload File</button>
+            <button id="refreshBtn" class="btn btn-secondary">Refresh</button>
+        </div>
+    </div>
+
+    <div class="files-content">
+        <!-- Upload Area -->
+        <div id="uploadArea" class="upload-area hidden">
+            <div class="upload-content">
+                <div class="upload-icon">📁</div>
+                <h3>Drop files here or click to select</h3>
+                <p>Files will be encrypted and stored securely</p>
+                <input type="file" id="fileInput" multiple style="display: none;">
+                <button id="selectFilesBtn" class="btn btn-primary">Select Files</button>
+            </div>
+        </div>
+
+        <!-- File List -->
+        <div class="file-list-container">
+            <div class="file-list-header">
+                <div class="file-list-info">
+                    <span id="fileCount">0 files</span>
+                    <span id="totalSize">0 MB</span>
+                </div>
+                <div class="file-list-actions">
+                    <input type="text" id="searchInput" placeholder="Search files..." class="search-input">
+                    <select id="sortSelect" class="sort-select">
+                        <option value="name">Sort by Name</option>
+                        <option value="date">Sort by Date</option>
+                        <option value="size">Sort by Size</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="file-list" id="fileList">
+                <div class="loading-placeholder">Loading files...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- File Preview Modal -->
+<div id="previewModal" class="modal hidden">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h3 id="previewTitle">File Preview</h3>
+            <button class="modal-close" id="previewModalClose">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="previewContent" class="preview-content">
+                <!-- Preview content will be loaded here -->
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="downloadPreviewBtn" class="btn btn-primary">Download</button>
+            <button id="deletePreviewBtn" class="btn btn-danger">Delete</button>
+            <button class="btn btn-secondary" id="previewCancel">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Progress Modal -->
+<div id="uploadProgressModal" class="modal hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Uploading Files</h3>
+        </div>
+        <div class="modal-body">
+            <div class="upload-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">0%</div>
+            </div>
+            <div id="uploadFiles" class="upload-files">
+                <!-- Upload file list will be shown here -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let files = [];
+    let currentFileId = null;
+    
+    // Load files on page load
+    loadFiles();
+    
+    // Set up event listeners
+    document.getElementById('uploadBtn').addEventListener('click', showUploadArea);
+    document.getElementById('refreshBtn').addEventListener('click', loadFiles);
+    document.getElementById('selectFilesBtn').addEventListener('click', () => {
+        document.getElementById('fileInput').click();
+    });
+    document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+    document.getElementById('searchInput').addEventListener('input', filterFiles);
+    document.getElementById('sortSelect').addEventListener('change', sortFiles);
+    
+    // Modal event listeners
+    document.getElementById('previewModalClose').addEventListener('click', hidePreviewModal);
+    document.getElementById('previewCancel').addEventListener('click', hidePreviewModal);
+    document.getElementById('downloadPreviewBtn').addEventListener('click', downloadCurrentFile);
+    document.getElementById('deletePreviewBtn').addEventListener('click', deleteCurrentFile);
+    
+    // Drag and drop
+    const uploadArea = document.getElementById('uploadArea');
+    uploadArea.addEventListener('dragover', handleDragOver);
+    uploadArea.addEventListener('dragleave', handleDragLeave);
+    uploadArea.addEventListener('drop', handleDrop);
+    
+    async function loadFiles() {
+        try {
+            showLoading();
+            const response = await apiRequest('/api/files');
+            if (response) {
+                files = response.files;
+                renderFiles();
+                updateFileStats();
+            }
+        } catch (error) {
+            showNotification('Failed to load files', 'error');
+        } finally {
+            hideLoading();
+        }
+    }
+    
+    function renderFiles() {
+        const fileList = document.getElementById('fileList');
+        
+        if (files.length === 0) {
+            fileList.innerHTML = '<div class="empty-state">No files found</div>';
+            return;
+        }
+        
+        const html = files.map(file => `
+            <div class="file-item" data-file-id="${file.id}">
+                <div class="file-icon">${getFileIcon(file.mime_type)}</div>
+                <div class="file-info">
+                    <div class="file-name">${file.original_name}</div>
+                    <div class="file-meta">
+                        <span class="file-size">${formatFileSize(file.size)}</span>
+                        <span class="file-date">${formatDate(file.created_at)}</span>
+                    </div>
+                </div>
+                <div class="file-actions">
+                    <button class="btn btn-sm btn-secondary" onclick="previewFile('${file.id}')">Preview</button>
+                    <button class="btn btn-sm btn-primary" onclick="downloadFile('${file.id}')">Download</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteFile('${file.id}')">Delete</button>
+                </div>
+            </div>
+        `).join('');
+        
+        fileList.innerHTML = html;
+    }
+    
+    function updateFileStats() {
+        const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+        document.getElementById('fileCount').textContent = `${files.length} files`;
+        document.getElementById('totalSize').textContent = formatFileSize(totalSize);
+    }
+    
+    function showUploadArea() {
+        document.getElementById('uploadArea').classList.remove('hidden');
+    }
+    
+    function hideUploadArea() {
+        document.getElementById('uploadArea').classList.add('hidden');
+    }
+    
+    function handleFileSelect(e) {
+        const selectedFiles = Array.from(e.target.files);
+        if (selectedFiles.length > 0) {
+            uploadFiles(selectedFiles);
+        }
+    }
+    
+    function handleDragOver(e) {
+        e.preventDefault();
+        e.currentTarget.classList.add('drag-over');
+    }
+    
+    function handleDragLeave(e) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drag-over');
+    }
+    
+    function handleDrop(e) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drag-over');
+        const droppedFiles = Array.from(e.dataTransfer.files);
+        if (droppedFiles.length > 0) {
+            uploadFiles(droppedFiles);
+        }
+    }
+    
+    async function uploadFiles(fileList) {
+        const uploadProgressModal = document.getElementById('uploadProgressModal');
+        const uploadFiles = document.getElementById('uploadFiles');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        
+        // Show upload progress modal
+        uploadProgressModal.classList.remove('hidden');
+        
+        // Show file list
+        uploadFiles.innerHTML = fileList.map(file => `
+            <div class="upload-file-item">
+                <span class="file-name">${file.name}</span>
+                <span class="file-status">Uploading...</span>
+            </div>
+        `).join('');
+        
+        let completed = 0;
+        const total = fileList.length;
+        
+        for (let i = 0; i < fileList.length; i++) {
+            const file = fileList[i];
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await apiRequest('/api/files/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.success) {
+                    const fileItem = uploadFiles.children[i];
+                    fileItem.querySelector('.file-status').textContent = 'Success';
+                    fileItem.classList.add('success');
+                } else {
+                    const fileItem = uploadFiles.children[i];
+                    fileItem.querySelector('.file-status').textContent = 'Failed';
+                    fileItem.classList.add('error');
+                }
+            } catch (error) {
+                const fileItem = uploadFiles.children[i];
+                fileItem.querySelector('.file-status').textContent = 'Failed';
+                fileItem.classList.add('error');
+            }
+            
+            completed++;
+            const progress = (completed / total) * 100;
+            progressFill.style.width = `${progress}%`;
+            progressText.textContent = `${Math.round(progress)}%`;
+        }
+        
+        // Hide upload progress modal after a delay
+        setTimeout(() => {
+            uploadProgressModal.classList.add('hidden');
+            hideUploadArea();
+            loadFiles(); // Refresh file list
+        }, 2000);
+    }
+    
+    function filterFiles() {
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+        const fileItems = document.querySelectorAll('.file-item');
+        
+        fileItems.forEach(item => {
+            const fileName = item.querySelector('.file-name').textContent.toLowerCase();
+            if (fileName.includes(searchTerm)) {
+                item.style.display = 'flex';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    }
+    
+    function sortFiles() {
+        const sortBy = document.getElementById('sortSelect').value;
+        
+        files.sort((a, b) => {
+            switch (sortBy) {
+                case 'name':
+                    return a.original_name.localeCompare(b.original_name);
+                case 'date':
+                    return new Date(b.created_at) - new Date(a.created_at);
+                case 'size':
+                    return b.size - a.size;
+                default:
+                    return 0;
+            }
+        });
+        
+        renderFiles();
+    }
+    
+    function getFileIcon(mimeType) {
+        if (mimeType.startsWith('image/')) return '🖼️';
+        if (mimeType.startsWith('video/')) return '🎥';
+        if (mimeType.startsWith('audio/')) return '🎵';
+        if (mimeType.includes('pdf')) return '📄';
+        if (mimeType.includes('text/')) return '📝';
+        if (mimeType.includes('zip') || mimeType.includes('archive')) return '📦';
+        return '📁';
+    }
+    
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    
+    function formatDate(dateString) {
+        return new Date(dateString).toLocaleDateString();
+    }
+    
+    // Global functions for file actions
+    window.previewFile = async function(fileId) {
+        currentFileId = fileId;
+        const file = files.find(f => f.id === fileId);
+        
+        document.getElementById('previewTitle').textContent = file.original_name;
+        document.getElementById('previewContent').innerHTML = '<div class="loading-placeholder">Loading preview...</div>';
+        document.getElementById('previewModal').classList.remove('hidden');
+        
+        try {
+            const response = await fetch(`/api/files/${fileId}/preview`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('vaultusb_token')}`
+                }
+            });
+            
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                
+                if (file.mime_type.startsWith('image/')) {
+                    document.getElementById('previewContent').innerHTML = `<img src="${url}" style="max-width: 100%; height: auto;">`;
+                } else if (file.mime_type.startsWith('text/')) {
+                    const text = await blob.text();
+                    document.getElementById('previewContent').innerHTML = `<pre style="white-space: pre-wrap; word-wrap: break-word;">${text}</pre>`;
+                } else {
+                    document.getElementById('previewContent').innerHTML = '<p>Preview not available for this file type</p>';
+                }
+            } else {
+                document.getElementById('previewContent').innerHTML = '<p>Failed to load preview</p>';
+            }
+        } catch (error) {
+            document.getElementById('previewContent').innerHTML = '<p>Error loading preview</p>';
+        }
+    };
+    
+    window.downloadFile = function(fileId) {
+        const link = document.createElement('a');
+        link.href = `/api/files/${fileId}/download`;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+    
+    window.deleteFile = async function(fileId) {
+        if (confirm('Are you sure you want to delete this file?')) {
+            try {
+                const response = await apiRequest(`/api/files/${fileId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.success) {
+                    showNotification('File deleted successfully', 'success');
+                    loadFiles();
+                } else {
+                    showNotification('Failed to delete file', 'error');
+                }
+            } catch (error) {
+                showNotification('Failed to delete file', 'error');
+            }
+        }
+    };
+    
+    window.downloadCurrentFile = function() {
+        if (currentFileId) {
+            downloadFile(currentFileId);
+        }
+    };
+    
+    window.deleteCurrentFile = function() {
+        if (currentFileId) {
+            deleteFile(currentFileId);
+            hidePreviewModal();
+        }
+    };
+    
+    function hidePreviewModal() {
+        document.getElementById('previewModal').classList.add('hidden');
+        currentFileId = null;
+    }
+});
+</script>
+{% endblock %}

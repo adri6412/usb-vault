@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+
+{% block title %}Wi-Fi - VaultUSB{% endblock %}
+
+{% block content %}
+<div class="wifi-page">
+    <div class="page-header">
+        <h2>Wi-Fi Management</h2>
+        <div class="page-actions">
+            <button id="scanBtn" class="btn btn-primary">Scan Networks</button>
+            <button id="refreshBtn" class="btn btn-secondary">Refresh Status</button>
+        </div>
+    </div>
+
+    <div class="wifi-content">
+        <!-- Current Connection Status -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Current Connection</h3>
+            </div>
+            <div class="card-content">
+                <div class="wifi-status" id="wifiStatus">
+                    <div class="status-item">
+                        <span class="status-label">Status:</span>
+                        <span class="status-value" id="connectionStatus">Loading...</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Network:</span>
+                        <span class="status-value" id="currentNetwork">-</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">IP Address:</span>
+                        <span class="status-value" id="ipAddress">-</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Signal:</span>
+                        <span class="status-value" id="signalLevel">-</span>
+                    </div>
+                </div>
+                <div class="wifi-actions">
+                    <button id="disconnectBtn" class="btn btn-danger hidden">Disconnect</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Available Networks -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Available Networks</h3>
+            </div>
+            <div class="card-content">
+                <div class="network-list" id="networkList">
+                    <div class="loading-placeholder">Click "Scan Networks" to find available Wi-Fi networks</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Saved Networks -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Saved Networks</h3>
+            </div>
+            <div class="card-content">
+                <div class="saved-networks" id="savedNetworks">
+                    <div class="loading-placeholder">Loading saved networks...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Connect Modal -->
+<div id="connectModal" class="modal hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Connect to Network</h3>
+            <button class="modal-close" id="connectModalClose">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="connectForm">
+                <div class="form-group">
+                    <label for="connectSSID">Network Name (SSID)</label>
+                    <input type="text" id="connectSSID" name="ssid" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="connectSecurity">Security Type</label>
+                    <select id="connectSecurity" name="security">
+                        <option value="WPA2">WPA2</option>
+                        <option value="WPA">WPA</option>
+                        <option value="WEP">WEP</option>
+                        <option value="Open">Open</option>
+                    </select>
+                </div>
+                <div class="form-group" id="passwordGroup">
+                    <label for="connectPassword">Password</label>
+                    <input type="password" id="connectPassword" name="password">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="connectCancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Connect</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentNetwork = null;
+    
+    // Load initial data
+    loadWifiStatus();
+    loadSavedNetworks();
+    
+    // Set up event listeners
+    document.getElementById('scanBtn').addEventListener('click', scanNetworks);
+    document.getElementById('refreshBtn').addEventListener('click', loadWifiStatus);
+    document.getElementById('disconnectBtn').addEventListener('click', disconnectWifi);
+    document.getElementById('connectForm').addEventListener('submit', connectToNetwork);
+    document.getElementById('connectModalClose').addEventListener('click', hideConnectModal);
+    document.getElementById('connectCancel').addEventListener('click', hideConnectModal);
+    document.getElementById('connectSecurity').addEventListener('change', togglePasswordField);
+    
+    async function loadWifiStatus() {
+        try {
+            const response = await apiRequest('/api/wifi/status');
+            if (response) {
+                updateWifiStatus(response);
+            }
+        } catch (error) {
+            showNotification('Failed to load Wi-Fi status', 'error');
+        }
+    }
+    
+    function updateWifiStatus(status) {
+        document.getElementById('connectionStatus').textContent = status.status;
+        document.getElementById('currentNetwork').textContent = status.ssid || '-';
+        document.getElementById('ipAddress').textContent = status.ip_address || '-';
+        document.getElementById('signalLevel').textContent = status.signal_level ? `${status.signal_level} dBm` : '-';
+        
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        if (status.status === 'connected') {
+            disconnectBtn.classList.remove('hidden');
+        } else {
+            disconnectBtn.classList.add('hidden');
+        }
+    }
+    
+    async function scanNetworks() {
+        try {
+            showLoading();
+            const response = await apiRequest('/api/wifi/networks');
+            if (response) {
+                renderNetworks(response);
+            }
+        } catch (error) {
+            showNotification('Failed to scan networks', 'error');
+        } finally {
+            hideLoading();
+        }
+    }
+    
+    function renderNetworks(networks) {
+        const networkList = document.getElementById('networkList');
+        
+        if (networks.length === 0) {
+            networkList.innerHTML = '<div class="empty-state">No networks found</div>';
+            return;
+        }
+        
+        const html = networks.map(network => `
+            <div class="network-item">
+                <div class="network-info">
+                    <div class="network-name">${network.ssid}</div>
+                    <div class="network-details">
+                        <span class="network-security">${network.security}</span>
+                        <span class="network-signal">${network.signal_level} dBm</span>
+                    </div>
+                </div>
+                <div class="network-actions">
+                    <button class="btn btn-sm btn-primary" onclick="showConnectModal('${network.ssid}', '${network.security}')">
+                        Connect
+                    </button>
+                </div>
+            </div>
+        `).join('');
+        
+        networkList.innerHTML = html;
+    }
+    
+    async function loadSavedNetworks() {
+        try {
+            // This would need to be implemented in the backend
+            // For now, show a placeholder
+            document.getElementById('savedNetworks').innerHTML = '<div class="empty-state">No saved networks</div>';
+        } catch (error) {
+            console.error('Failed to load saved networks:', error);
+        }
+    }
+    
+    function showConnectModal(ssid, security) {
+        currentNetwork = { ssid, security };
+        document.getElementById('connectSSID').value = ssid;
+        document.getElementById('connectSecurity').value = security;
+        document.getElementById('connectPassword').value = '';
+        togglePasswordField();
+        document.getElementById('connectModal').classList.remove('hidden');
+        document.getElementById('connectPassword').focus();
+    }
+    
+    function hideConnectModal() {
+        document.getElementById('connectModal').classList.add('hidden');
+        currentNetwork = null;
+    }
+    
+    function togglePasswordField() {
+        const security = document.getElementById('connectSecurity').value;
+        const passwordGroup = document.getElementById('passwordGroup');
+        const passwordInput = document.getElementById('connectPassword');
+        
+        if (security === 'Open') {
+            passwordGroup.style.display = 'none';
+            passwordInput.required = false;
+        } else {
+            passwordGroup.style.display = 'block';
+            passwordInput.required = true;
+        }
+    }
+    
+    async function connectToNetwork(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const request = {
+            ssid: formData.get('ssid'),
+            password: formData.get('password'),
+            security: formData.get('security')
+        };
+        
+        try {
+            showLoading();
+            const response = await apiRequest('/api/wifi/connect', {
+                method: 'POST',
+                body: JSON.stringify(request)
+            });
+            
+            if (response.success) {
+                showNotification('Connected successfully', 'success');
+                hideConnectModal();
+                loadWifiStatus();
+            } else {
+                showNotification(response.message, 'error');
+            }
+        } catch (error) {
+            showNotification('Failed to connect to network', 'error');
+        } finally {
+            hideLoading();
+        }
+    }
+    
+    async function disconnectWifi() {
+        if (confirm('Are you sure you want to disconnect from the current network?')) {
+            try {
+                const response = await apiRequest('/api/wifi/disconnect', {
+                    method: 'POST'
+                });
+                
+                if (response.success) {
+                    showNotification('Disconnected successfully', 'success');
+                    loadWifiStatus();
+                } else {
+                    showNotification(response.message, 'error');
+                }
+            } catch (error) {
+                showNotification('Failed to disconnect', 'error');
+            }
+        }
+    }
+    
+    // Global function for connecting to networks
+    window.showConnectModal = showConnectModal;
+});
+</script>
+{% endblock %}

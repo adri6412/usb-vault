@@ -1,0 +1,40 @@
+[Unit]
+Description=VaultUSB - Raspberry Pi Zero USB Vault (DietPi Bookworm)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=vaultusb
+Group=vaultusb
+WorkingDirectory=/opt/vaultusb
+Environment=PATH=/opt/vaultusb/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONPATH=/opt/vaultusb
+Environment=PYTHONUNBUFFERED=1
+Environment=DIETPI_VERSION=bookworm
+ExecStart=/opt/vaultusb/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vaultusb
+
+# Security settings (optimized for DietPi Bookworm)
+NoNewPrivileges=false
+PrivateTmp=false
+ProtectSystem=false
+ProtectHome=false
+ReadWritePaths=/opt/vaultusb
+ReadWritePaths=/var/log
+ReadWritePaths=/etc/wpa_supplicant
+ReadWritePaths=/etc/hostapd
+ReadWritePaths=/etc/dnsmasq.d
+ReadWritePaths=/boot/dietpi
+
+# Resource limits (optimized for Bookworm)
+LimitNOFILE=65536
+MemoryMax=256M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target

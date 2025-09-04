@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - VaultUSB{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="dashboard-header">
+        <h2>Dashboard</h2>
+        <div class="vault-status" id="vaultStatus">
+            <span class="status-indicator locked">🔒</span>
+            <span class="status-text">Vault Locked</span>
+        </div>
+    </div>
+
+    <div class="dashboard-grid">
+        <!-- Vault Status Card -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Vault Status</h3>
+            </div>
+            <div class="card-content">
+                <div class="vault-info">
+                    <div class="info-item">
+                        <span class="info-label">Status:</span>
+                        <span class="info-value" id="vaultStatusValue">Locked</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Last Activity:</span>
+                        <span class="info-value" id="lastActivity">Never</span>
+                    </div>
+                </div>
+                <div class="vault-actions">
+                    <button id="unlockBtn" class="btn btn-primary">Unlock Vault</button>
+                    <button id="lockBtn" class="btn btn-secondary hidden">Lock Vault</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Status Card -->
+        <div class="card">
+            <div class="card-header">
+                <h3>System Status</h3>
+            </div>
+            <div class="card-content">
+                <div class="system-info" id="systemInfo">
+                    <div class="info-item">
+                        <span class="info-label">Uptime:</span>
+                        <span class="info-value" id="uptime">Loading...</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Memory:</span>
+                        <span class="info-value" id="memory">Loading...</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Disk:</span>
+                        <span class="info-value" id="disk">Loading...</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">CPU:</span>
+                        <span class="info-value" id="cpu">Loading...</span>
+                    </div>
+                </div>
+                <div class="system-actions">
+                    <button id="refreshSystemBtn" class="btn btn-secondary">Refresh</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Wi-Fi Status Card -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Wi-Fi Status</h3>
+            </div>
+            <div class="card-content">
+                <div class="wifi-info" id="wifiInfo">
+                    <div class="info-item">
+                        <span class="info-label">Status:</span>
+                        <span class="info-value" id="wifiStatus">Loading...</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Network:</span>
+                        <span class="info-value" id="wifiNetwork">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">IP Address:</span>
+                        <span class="info-value" id="wifiIP">-</span>
+                    </div>
+                </div>
+                <div class="wifi-actions">
+                    <button id="refreshWifiBtn" class="btn btn-secondary">Refresh</button>
+                    <a href="/wifi" class="btn btn-primary">Manage Wi-Fi</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions Card -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Quick Actions</h3>
+            </div>
+            <div class="card-content">
+                <div class="quick-actions">
+                    <a href="/files" class="btn btn-primary">Manage Files</a>
+                    <a href="/wifi" class="btn btn-secondary">Wi-Fi Settings</a>
+                    <a href="/system" class="btn btn-secondary">System Updates</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Unlock Modal -->
+<div id="unlockModal" class="modal hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Unlock Vault</h3>
+            <button class="modal-close" id="unlockModalClose">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="unlockForm">
+                <div class="form-group">
+                    <label for="masterPassword">Master Password</label>
+                    <input type="password" id="masterPassword" name="masterPassword" required>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="unlockCancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Unlock</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Load initial data
+    loadSystemStatus();
+    loadWifiStatus();
+    loadVaultStatus();
+    
+    // Set up event listeners
+    document.getElementById('unlockBtn').addEventListener('click', showUnlockModal);
+    document.getElementById('lockBtn').addEventListener('click', lockVault);
+    document.getElementById('refreshSystemBtn').addEventListener('click', loadSystemStatus);
+    document.getElementById('refreshWifiBtn').addEventListener('click', loadWifiStatus);
+    document.getElementById('unlockForm').addEventListener('submit', unlockVault);
+    document.getElementById('unlockModalClose').addEventListener('click', hideUnlockModal);
+    document.getElementById('unlockCancel').addEventListener('click', hideUnlockModal);
+    
+    // Auto-refresh every 30 seconds
+    setInterval(() => {
+        loadSystemStatus();
+        loadWifiStatus();
+        loadVaultStatus();
+    }, 30000);
+    
+    async function loadSystemStatus() {
+        try {
+            const response = await apiRequest('/api/system/status');
+            if (response) {
+                document.getElementById('uptime').textContent = formatUptime(response.uptime);
+                document.getElementById('memory').textContent = response.memory_usage + '%';
+                document.getElementById('disk').textContent = response.disk_usage + '%';
+                document.getElementById('cpu').textContent = response.cpu_usage + '%';
+            }
+        } catch (error) {
+            console.error('Failed to load system status:', error);
+        }
+    }
+    
+    async function loadWifiStatus() {
+        try {
+            const response = await apiRequest('/api/wifi/status');
+            if (response) {
+                document.getElementById('wifiStatus').textContent = response.status;
+                document.getElementById('wifiNetwork').textContent = response.ssid || '-';
+                document.getElementById('wifiIP').textContent = response.ip_address || '-';
+            }
+        } catch (error) {
+            console.error('Failed to load Wi-Fi status:', error);
+        }
+    }
+    
+    async function loadVaultStatus() {
+        try {
+            const response = await apiRequest('/api/vault/status');
+            if (response) {
+                const vaultStatus = document.getElementById('vaultStatusValue');
+                const vaultIndicator = document.querySelector('.status-indicator');
+                const unlockBtn = document.getElementById('unlockBtn');
+                const lockBtn = document.getElementById('lockBtn');
+                
+                if (response.unlocked) {
+                    vaultStatus.textContent = 'Unlocked';
+                    vaultIndicator.textContent = '🔓';
+                    vaultIndicator.className = 'status-indicator unlocked';
+                    unlockBtn.classList.add('hidden');
+                    lockBtn.classList.remove('hidden');
+                } else {
+                    vaultStatus.textContent = 'Locked';
+                    vaultIndicator.textContent = '🔒';
+                    vaultIndicator.className = 'status-indicator locked';
+                    unlockBtn.classList.remove('hidden');
+                    lockBtn.classList.add('hidden');
+                }
+                
+                if (response.last_activity) {
+                    document.getElementById('lastActivity').textContent = new Date(response.last_activity).toLocaleString();
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load vault status:', error);
+        }
+    }
+    
+    function showUnlockModal() {
+        document.getElementById('unlockModal').classList.remove('hidden');
+        document.getElementById('masterPassword').focus();
+    }
+    
+    function hideUnlockModal() {
+        document.getElementById('unlockModal').classList.add('hidden');
+        document.getElementById('unlockForm').reset();
+    }
+    
+    async function unlockVault(e) {
+        e.preventDefault();
+        
+        const password = document.getElementById('masterPassword').value;
+        
+        try {
+            const response = await apiRequest('/api/vault/unlock', {
+                method: 'POST',
+                body: new FormData().append('password', password)
+            });
+            
+            if (response.success) {
+                showNotification('Vault unlocked successfully', 'success');
+                hideUnlockModal();
+                loadVaultStatus();
+            } else {
+                showNotification(response.message, 'error');
+            }
+        } catch (error) {
+            showNotification('Failed to unlock vault', 'error');
+        }
+    }
+    
+    async function lockVault() {
+        try {
+            const response = await apiRequest('/api/vault/lock', {
+                method: 'POST'
+            });
+            
+            if (response.success) {
+                showNotification('Vault locked successfully', 'success');
+                loadVaultStatus();
+            } else {
+                showNotification(response.message, 'error');
+            }
+        } catch (error) {
+            showNotification('Failed to lock vault', 'error');
+        }
+    }
+    
+    function formatUptime(seconds) {
+        const days = Math.floor(seconds / 86400);
+        const hours = Math.floor((seconds % 86400) / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        
+        if (days > 0) {
+            return `${days}d ${hours}h ${minutes}m`;
+        } else if (hours > 0) {
+            return `${hours}h ${minutes}m`;
+        } else {
+            return `${minutes}m`;
+        }
+    }
+});
+</script>
+{% endblock %}

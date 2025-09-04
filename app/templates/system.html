@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+
+{% block title %}System - VaultUSB{% endblock %}
+
+{% block content %}
+<div class="system-page">
+    <div class="page-header">
+        <h2>System Management</h2>
+        <div class="page-actions">
+            <button id="refreshBtn" class="btn btn-secondary">Refresh</button>
+        </div>
+    </div>
+
+    <div class="system-content">
+        <!-- System Status -->
+        <div class="card">
+            <div class="card-header">
+                <h3>System Status</h3>
+            </div>
+            <div class="card-content">
+                <div class="system-stats" id="systemStats">
+                    <div class="stat-item">
+                        <div class="stat-label">Uptime</div>
+                        <div class="stat-value" id="uptime">Loading...</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Memory Usage</div>
+                        <div class="stat-value" id="memory">Loading...</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Disk Usage</div>
+                        <div class="stat-value" id="disk">Loading...</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">CPU Usage</div>
+                        <div class="stat-value" id="cpu">Loading...</div>
+                    </div>
+                </div>
+                <div class="system-actions">
+                    <button id="checkUpdatesBtn" class="btn btn-primary">Check Updates</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Updates Status -->
+        <div class="card">
+            <div class="card-header">
+                <h3>System Updates</h3>
+                <div class="card-actions">
+                    <span id="updateStatus" class="status-badge">Unknown</span>
+                </div>
+            </div>
+            <div class="card-content">
+                <div class="updates-info" id="updatesInfo">
+                    <div class="loading-placeholder">Click "Check Updates" to check for available updates</div>
+                </div>
+                <div class="updates-actions">
+                    <button id="upgradeBtn" class="btn btn-primary hidden">Upgrade System</button>
+                    <button id="rebootBtn" class="btn btn-danger hidden">Reboot System</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upgrade Progress -->
+        <div class="card hidden" id="upgradeProgressCard">
+            <div class="card-header">
+                <h3>Upgrade Progress</h3>
+            </div>
+            <div class="card-content">
+                <div class="upgrade-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="upgradeProgressFill"></div>
+                    </div>
+                    <div class="progress-text" id="upgradeProgressText">Starting upgrade...</div>
+                </div>
+                <div class="upgrade-log" id="upgradeLog">
+                    <!-- Upgrade log will be shown here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reboot Confirmation Modal -->
+<div id="rebootModal" class="modal hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Confirm Reboot</h3>
+            <button class="modal-close" id="rebootModalClose">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>Are you sure you want to reboot the system? This will disconnect all active sessions.</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" id="rebootCancel">Cancel</button>
+            <button class="btn btn-danger" id="rebootConfirm">Reboot Now</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let systemStatus = null;
+    let updateInfo = null;
+    
+    // Load initial data
+    loadSystemStatus();
+    
+    // Set up event listeners
+    document.getElementById('refreshBtn').addEventListener('click', loadSystemStatus);
+    document.getElementById('checkUpdatesBtn').addEventListener('click', checkUpdates);
+    document.getElementById('upgradeBtn').addEventListener('click', upgradeSystem);
+    document.getElementById('rebootBtn').addEventListener('click', showRebootModal);
+    document.getElementById('rebootModalClose').addEventListener('click', hideRebootModal);
+    document.getElementById('rebootCancel').addEventListener('click', hideRebootModal);
+    document.getElementById('rebootConfirm').addEventListener('click', rebootSystem);
+    
+    // Auto-refresh every 30 seconds
+    setInterval(loadSystemStatus, 30000);
+    
+    async function loadSystemStatus() {
+        try {
+            const response = await apiRequest('/api/system/status');
+            if (response) {
+                systemStatus = response;
+                updateSystemDisplay(response);
+            }
+        } catch (error) {
+            showNotification('Failed to load system status', 'error');
+        }
+    }
+    
+    function updateSystemDisplay(status) {
+        document.getElementById('uptime').textContent = formatUptime(status.uptime);
+        document.getElementById('memory').textContent = `${status.memory_usage}%`;
+        document.getElementById('disk').textContent = `${status.disk_usage}%`;
+        document.getElementById('cpu').textContent = `${status.cpu_usage}%`;
+        
+        // Show reboot button if reboot is required
+        const rebootBtn = document.getElementById('rebootBtn');
+        if (status.reboot_required) {
+            rebootBtn.classList.remove('hidden');
+        } else {
+            rebootBtn.classList.add('hidden');
+        }
+    }
+    
+    async function checkUpdates() {
+        try {
+            showLoading();
+            const response = await apiRequest('/api/system/updates');
+            if (response) {
+                updateInfo = response;
+                updateUpdatesDisplay(response);
+            }
+        } catch (error) {
+            showNotification('Failed to check for updates', 'error');
+        } finally {
+            hideLoading();
+        }
+    }
+    
+    function updateUpdatesDisplay(updates) {
+        const updateStatus = document.getElementById('updateStatus');
+        const updatesInfo = document.getElementById('updatesInfo');
+        const upgradeBtn = document.getElementById('upgradeBtn');
+        
+        if (updates.updates_available) {
+            updateStatus.textContent = `${updates.total_packages} updates available`;
+            updateStatus.className = 'status-badge status-warning';
+            
+            const packagesHtml = updates.packages.map(pkg => `
+                <div class="package-item">
+                    <div class="package-name">${pkg.package}</div>
+                    <div class="package-versions">
+                        <span class="current-version">${pkg.current_version}</span>
+                        <span class="version-arrow">→</span>
+                        <span class="new-version">${pkg.available_version}</span>
+                    </div>
+                    <div class="package-priority priority-${pkg.priority}">${pkg.priority}</div>
+                </div>
+            `).join('');
+            
+            updatesInfo.innerHTML = `
+                <div class="updates-summary">
+                    <h4>Available Updates (${updates.total_packages})</h4>
+                </div>
+                <div class="packages-list">
+                    ${packagesHtml}
+                </div>
+            `;
+            
+            upgradeBtn.classList.remove('hidden');
+        } else {
+            updateStatus.textContent = 'Up to date';
+            updateStatus.className = 'status-badge status-success';
+            
+            updatesInfo.innerHTML = '<div class="empty-state">System is up to date</div>';
+            upgradeBtn.classList.add('hidden');
+        }
+    }
+    
+    async function upgradeSystem() {
+        if (!confirm('Are you sure you want to upgrade the system? This may take several minutes and will require a reboot.')) {
+            return;
+        }
+        
+        try {
+            showLoading();
+            document.getElementById('upgradeProgressCard').classList.remove('hidden');
+            document.getElementById('upgradeLog').innerHTML = '<div class="loading-placeholder">Starting upgrade...</div>';
+            
+            const response = await apiRequest('/api/system/upgrade', {
+                method: 'POST'
+            });
+            
+            if (response.success) {
+                showNotification('System upgrade completed successfully', 'success');
+                document.getElementById('upgradeProgressFill').style.width = '100%';
+                document.getElementById('upgradeProgressText').textContent = 'Upgrade completed';
+                document.getElementById('upgradeLog').innerHTML = `<pre>${response.log}</pre>`;
+                document.getElementById('rebootBtn').classList.remove('hidden');
+            } else {
+                showNotification(`Upgrade failed: ${response.message}`, 'error');
+                document.getElementById('upgradeLog').innerHTML = `<pre>${response.log || 'No log available'}</pre>`;
+            }
+        } catch (error) {
+            showNotification('Upgrade failed', 'error');
+        } finally {
+            hideLoading();
+        }
+    }
+    
+    function showRebootModal() {
+        document.getElementById('rebootModal').classList.remove('hidden');
+    }
+    
+    function hideRebootModal() {
+        document.getElementById('rebootModal').classList.add('hidden');
+    }
+    
+    async function rebootSystem() {
+        try {
+            const response = await apiRequest('/api/system/reboot', {
+                method: 'POST'
+            });
+            
+            if (response.success) {
+                showNotification('System will reboot in 1 minute', 'success');
+                hideRebootModal();
+            } else {
+                showNotification(`Reboot failed: ${response.message}`, 'error');
+            }
+        } catch (error) {
+            showNotification('Reboot failed', 'error');
+        }
+    }
+    
+    function formatUptime(seconds) {
+        const days = Math.floor(seconds / 86400);
+        const hours = Math.floor((seconds % 86400) / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        
+        if (days > 0) {
+            return `${days}d ${hours}h ${minutes}m`;
+        } else if (hours > 0) {
+            return `${hours}h ${minutes}m`;
+        } else {
+            return `${minutes}m`;
+        }
+    }
+});
+</script>
+{% endblock %}
