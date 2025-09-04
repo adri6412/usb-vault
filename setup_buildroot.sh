@@ -47,7 +47,7 @@ main() {
 
   # Build PyInstaller binaries for ARM using Docker
   print_step "Compilo VaultUSB con PyInstaller per ARM usando Docker"
-  if command -v docker >/dev/null 2>&1; then
+  if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     # Create temporary build environment
     BUILD_DIR="${WORKDIR}/build_arm"
     mkdir -p "${BUILD_DIR}"
@@ -98,8 +98,8 @@ EOF
     # Build Docker image and extract binary
     cd "${BUILD_DIR}"
     mkdir -p output
-    docker build --platform linux/arm64 -t vaultusb-arm -f Dockerfile .
-    docker run --platform linux/arm64 --rm -v "${BUILD_DIR}/output:/output" vaultusb-arm
+    docker build -t vaultusb-arm -f Dockerfile .
+    docker run --rm -v "${BUILD_DIR}/output:/output" vaultusb-arm
     
     # Copy the compiled binary to overlay
     cp output/usr/local/bin/vaultusb "${OVERLAY_DIR}/usr/local/bin/vaultusb"
