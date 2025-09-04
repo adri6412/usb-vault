@@ -63,9 +63,8 @@ FROM --platform=linux/arm64 python:3.11-slim
 
 WORKDIR /app
 
-# Install QEMU for ARM emulation
+# Install build dependencies
 RUN apt-get update && apt-get install -y \
-    qemu-user-static \
     gcc \
     g++ \
     && rm -rf /var/lib/apt/lists/*
@@ -96,6 +95,10 @@ RUN cp dist/vaultusb /output/usr/local/bin/vaultusb
 RUN chmod +x /output/usr/local/bin/vaultusb
 EOF
 
+    # Setup QEMU for ARM emulation
+    print_step "Configuro QEMU per emulazione ARM"
+    docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+    
     # Build Docker image and extract binary
     cd "${BUILD_DIR}"
     mkdir -p output
