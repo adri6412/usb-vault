@@ -410,13 +410,17 @@ BR2_PACKAGE_VAULTUSB_CPP=y
 BR2_SYSTEM_DHCP="eth0"
 
 # Post-build script to create SD card image
-BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_VAULTUSB_PATH)/board/vaultusb/patches/post-build.sh"
+# BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_VAULTUSB_PATH)/board/vaultusb/patches/post-build.sh"
 
 # Host tools needed for image creation
 BR2_PACKAGE_HOST_GENIMAGE=y
 BR2_PACKAGE_HOST_DOSFSTOOLS=y
 BR2_PACKAGE_HOST_MTOOLS=y
 BR2_PACKAGE_HOST_PARTED=y
+
+# Generate SD card image with genimage
+BR2_ROOTFS_GENIMAGE=y
+BR2_ROOTFS_GENIMAGE_CONFIG_FILE="$(BR2_EXTERNAL_VAULTUSB_PATH)/board/vaultusb/patches/genimage.cfg"
 EOF
 
   # Prepare Buildroot config and build
