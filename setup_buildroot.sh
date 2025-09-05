@@ -439,6 +439,23 @@ EOF
   print_step "Configuro external tree"
   printf "BR2_EXTERNAL=%s\n" "${BOARD_DIR}" >> .config
 
+  # Ensure RPI firmware configuration is present
+  print_step "Verifico configurazione RPI firmware"
+  if ! grep -q "BR2_TARGET_RPI_FIRMWARE=y" .config; then
+    echo "Aggiungo configurazione RPI firmware manualmente..."
+    echo "BR2_TARGET_RPI_FIRMWARE=y" >> .config
+    echo "BR2_TARGET_RPI_FIRMWARE_BOOTCODE_BIN=y" >> .config
+    echo "BR2_TARGET_RPI_FIRMWARE_VARIANT_PI_ZERO_W=y" >> .config
+    echo "BR2_TARGET_RPI_FIRMWARE_CONFIG_FILE=\"/app/usb-vault/board/vaultusb/patches/config.txt\"" >> .config
+    echo "BR2_TARGET_RPI_FIRMWARE_CMDLINE_FILE=\"/app/usb-vault/board/vaultusb/patches/cmdline.txt\"" >> .config
+    echo "✓ Configurazione RPI firmware aggiunta"
+  else
+    echo "✓ Configurazione RPI firmware già presente"
+  fi
+
+  # Apply configuration
+  make olddefconfig
+
   # Note: Non facciamo make clean per permettere build incrementali
   # Se necessario, eseguire manualmente: make clean
   
