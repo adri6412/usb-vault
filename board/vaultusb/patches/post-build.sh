@@ -43,19 +43,22 @@ if [ ! -f "$IMAGES_OUTPUT_DIR/boot.vfat" ]; then
     echo "✓ Immagine boot.vfat creata"
 fi
 
-# Crea genimage.cfg corretto
+# Crea genimage.cfg corretto per Raspberry Pi
 cat > "$PATCHES_DIR/genimage.cfg" << 'GENEOF'
 image sdcard.img {
     hdimage {
-        partition-table-type = "gpt"
+        partition-table-type = "mbr"
     }
 
     partition boot {
+        partition-type = 0xC
+        bootable = true
         image = "boot.vfat"
         size = 256M
     }
 
     partition rootfs {
+        partition-type = 0x83
         image = "rootfs.ext2"
         size = 120M
     }
