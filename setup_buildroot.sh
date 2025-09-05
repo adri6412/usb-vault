@@ -445,11 +445,24 @@ EOF
   print_step "Avvio build immagine (questo richiede tempo)"
   make -j"$(nproc)" || make
 
+  # Execute post-image script to create SD card image
+  print_step "Eseguo post-image script per creare immagine SD"
+  if [ -f "${BOARD_DIR}/patches/post-image.sh" ]; then
+    chmod +x "${BOARD_DIR}/patches/post-image.sh"
+    "${BOARD_DIR}/patches/post-image.sh"
+    print_step "Post-image script completato"
+  else
+    echo "WARNING: post-image.sh non trovato in ${BOARD_DIR}/patches/"
+  fi
+
   IMG_PATH="${OUTPUT_DIR}/images/sdcard.img"
   if [ -f "${IMG_PATH}" ]; then
-    print_step "Immagine generata: ${IMG_PATH}"
+    print_step "Immagine SD generata: ${IMG_PATH}"
+    ls -lh "${IMG_PATH}"
   else
-    echo "Build completata ma immagine non trovata in ${IMG_PATH}. Controllare output/images/." >&2
+    echo "Build completata ma immagine SD non trovata in ${IMG_PATH}. Controllare output/images/." >&2
+    echo "File disponibili in output/images/:"
+    ls -la "${OUTPUT_DIR}/images/" || echo "Directory images non esiste"
   fi
 }
 
