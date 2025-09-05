@@ -2,32 +2,25 @@
 
 set -euo pipefail
 
-# Clone the minimal buildroot project for Pi Zero
-MINIMAL_REPO="https://github.com/Kytech/rpi-zero-minimal-buildroot.git"
+# Use existing buildroot directory
+BUILDROOT_DIR="${1:-/app/usb-vault/third_party/buildroot-2024.02.6}"
 WORKDIR="${PWD}"
-MINIMAL_DIR="${WORKDIR}/rpi-zero-minimal-buildroot"
-BUILD_DIR="${MINIMAL_DIR}/build_workdir"
 
 print_step() {
   echo "[+] $1"
 }
 
 main() {
-  print_step "Setting up VaultUSB with minimal buildroot"
-  
-  # Clone the minimal buildroot project
-  if [ ! -d "${MINIMAL_DIR}" ]; then
-    git clone --recursive "${MINIMAL_REPO}" "${MINIMAL_DIR}"
-  else
-    print_step "Minimal buildroot project already exists, updating..."
-    cd "${MINIMAL_DIR}"
-    git pull
-    git submodule update --init --recursive
+  if [ ! -d "${BUILDROOT_DIR}" ]; then
+    echo "Error: Buildroot directory not found: ${BUILDROOT_DIR}"
+    echo "Usage: $0 [buildroot_directory]"
+    echo "Example: $0 /path/to/buildroot"
+    exit 1
   fi
 
-  print_step "Setting up build environment"
-  cd "${BUILD_DIR}"
-  ./configure
+  print_step "Adding VaultUSB to existing buildroot at: ${BUILDROOT_DIR}"
+  
+  cd "${BUILDROOT_DIR}"
 
   print_step "Customizing buildroot configuration for VaultUSB"
   
@@ -45,10 +38,11 @@ main() {
   # Enable USB gadget support
   echo "BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES=\"\$(BR2_EXTERNAL_RPI_ZERO_MIN_TREE_PATH)/board/raspberrypi0/linux.config\"" >> .config
   
-  # Create VaultUSB package
-  mkdir -p "package/vaultusb"
+  # Create VaultUSB package in external tree
+  EXTERNAL_DIR="board/vaultusb"
+  mkdir -p "${EXTERNAL_DIR}/package/vaultusb"
   
-  cat > "package/vaultusb/Config.in" << 'EOF'
+  cat > "${EXTERNAL_DIR}/package/vaultusb/Config.in" << 'EOF'
 config BR2_PACKAGE_VAULTUSB
 	bool "vaultusb"
 	depends on BR2_PACKAGE_PYTHON3
@@ -56,7 +50,7 @@ config BR2_PACKAGE_VAULTUSB
 	  VaultUSB - Secure USB storage device
 EOF
 
-  cat > "package/vaultusb/vaultusb.mk" << 'EOF'
+  cat > "${EXTERNAL_DIR}/package/vaultusb/vaultusb.mk" << 'EOF'
 VAULTUSB_VERSION = 1.0
 VAULTUSB_SITE = $(WORKDIR)/vaultusb
 VAULTUSB_SITE_METHOD = local
@@ -121,39 +115,42 @@ EOF
     cp "${WORKDIR}/config.toml" "vaultusb/"
   fi
 
+  # Create external tree configuration
+  cat > "${EXTERNAL_DIR}/Config.in" << 'EOF'
+source "$BR2_EXTERNAL_VAULTUSB_PATH/package/vaultusb/Config.in"
+EOF
+
+  cat > "${EXTERNAL_DIR}/external.desc" << 'EOF'
+name: VAULTUSB
+desc: VaultUSB - Secure USB storage device
+EOF
+
+  cat > "${EXTERNAL_DIR}/external.mk" << 'EOF'
+# VaultUSB external tree
+EOF
+
+  # Register external tree
+  echo "BR2_EXTERNAL=${EXTERNAL_DIR}" >> .config
+
   # Update package list
   echo "source \"package/vaultusb/Config.in\"" >> package/Config.in
 
   # Apply configuration
   make olddefconfig
 
-  # Fix for SIGSTKSZ issue in host-m4
-  print_step "Applying SIGSTKSZ fix for host-m4"
-  if [ -f "build/host-m4-1.4.18/lib/c-stack.c" ]; then
-    sed -i 's/#elif HAVE_LIBSIGSEGV && SIGSTKSZ < 16384/#elif HAVE_LIBSIGSEGV \&\& defined(SIGSTKSZ) \&\& SIGSTKSZ < 16384/' build/host-m4-1.4.18/lib/c-stack.c
-    echo "✓ SIGSTKSZ fix applied"
-  fi
-
-  # Alternative fix: disable host-m4 if the fix doesn't work
-  if ! make host-m4 2>/dev/null; then
-    print_step "Host-m4 build failed, trying alternative approach"
-    echo "BR2_PACKAGE_HOST_M4=n" >> .config
-    make olddefconfig
-    echo "✓ Disabled host-m4 package"
-  fi
-
-  print_step "Building VaultUSB image"
-  make -j"$(nproc)" || make
-
-  print_step "Build completed!"
+  print_step "VaultUSB package added to buildroot"
+  echo "✓ VaultUSB package created in ${EXTERNAL_DIR}/package/vaultusb/"
+  echo "✓ External tree configured"
+  echo "✓ Required packages enabled"
   
-  if [ -f "output/images/sdcard.img" ]; then
-    print_step "VaultUSB SD card image: output/images/sdcard.img"
-    ls -lh "output/images/sdcard.img"
-  else
-    echo "Build completed but sdcard.img not found. Checking available images:"
-    ls -la "output/images/"
-  fi
+  print_step "To build with VaultUSB:"
+  echo "1. Run: make menuconfig"
+  echo "2. Enable VaultUSB package in Target packages"
+  echo "3. Run: make"
+  echo ""
+  echo "Or build directly: make vaultusb"
+
+  print_step "Setup completed!"
 }
 
 main "$@"
