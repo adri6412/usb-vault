@@ -127,6 +127,21 @@ EOF
   # Apply configuration
   make olddefconfig
 
+  # Fix for SIGSTKSZ issue in host-m4
+  print_step "Applying SIGSTKSZ fix for host-m4"
+  if [ -f "build/host-m4-1.4.18/lib/c-stack.c" ]; then
+    sed -i 's/#elif HAVE_LIBSIGSEGV && SIGSTKSZ < 16384/#elif HAVE_LIBSIGSEGV \&\& defined(SIGSTKSZ) \&\& SIGSTKSZ < 16384/' build/host-m4-1.4.18/lib/c-stack.c
+    echo "✓ SIGSTKSZ fix applied"
+  fi
+
+  # Alternative fix: disable host-m4 if the fix doesn't work
+  if ! make host-m4 2>/dev/null; then
+    print_step "Host-m4 build failed, trying alternative approach"
+    echo "BR2_PACKAGE_HOST_M4=n" >> .config
+    make olddefconfig
+    echo "✓ Disabled host-m4 package"
+  fi
+
   print_step "Building VaultUSB image"
   make -j"$(nproc)" || make
 
