@@ -38,6 +38,20 @@ if [ ! -d "$IMAGES_DIR/boot" ]; then
     exit 1
 fi
 
+# Copy RPI firmware files from build directory to boot directory
+echo "Copying RPI firmware files..."
+RPI_FIRMWARE_BUILD_DIR=$(find /app/usb-vault/third_party/buildroot-2024.02.6/output/build -name "rpi-firmware-*" -type d | head -1)
+if [ -d "$RPI_FIRMWARE_BUILD_DIR/boot" ]; then
+    echo "Found RPI firmware build directory: $RPI_FIRMWARE_BUILD_DIR"
+    cp "$RPI_FIRMWARE_BUILD_DIR/boot/bootcode.bin" "$IMAGES_DIR/boot/"
+    cp "$RPI_FIRMWARE_BUILD_DIR/boot/start.elf" "$IMAGES_DIR/boot/"
+    cp "$RPI_FIRMWARE_BUILD_DIR/boot/fixup.dat" "$IMAGES_DIR/boot/"
+    cp "$RPI_FIRMWARE_BUILD_DIR/boot/bcm2708-rpi-zero-w.dtb" "$IMAGES_DIR/boot/"
+    echo "✓ RPI firmware files copied"
+else
+    echo "WARNING: RPI firmware build directory not found"
+fi
+
 # Debug: Show boot directory contents
 echo "Boot directory contents:"
 ls -la "$IMAGES_DIR/boot"
