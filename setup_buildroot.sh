@@ -409,8 +409,7 @@ BR2_PACKAGE_VAULTUSB_CPP=y
 # Enable systemd service at boot
 BR2_SYSTEM_DHCP="eth0"
 
-# Post-build script to create SD card image
-# BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_VAULTUSB_PATH)/board/vaultusb/patches/post-build.sh"
+# Post-build script disabled - using BR2_ROOTFS_GENIMAGE instead
 
 # Host tools needed for image creation
 BR2_PACKAGE_HOST_GENIMAGE=y
