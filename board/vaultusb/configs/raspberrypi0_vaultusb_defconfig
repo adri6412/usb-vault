@@ -88,9 +88,8 @@ BR2_PACKAGE_HOST_DOSFSTOOLS=y
 BR2_PACKAGE_HOST_MTOOLS=y
 BR2_PACKAGE_HOST_PARTED=y
 
-# Generate SD card image with genimage
-BR2_ROOTFS_GENIMAGE=y
-BR2_ROOTFS_GENIMAGE_CONFIG_FILE="$(BR2_EXTERNAL_VAULTUSB_PATH)/board/vaultusb/patches/genimage.cfg"
+# Generate SD card image with post-image script
+BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_VAULTUSB_PATH)/board/vaultusb/patches/post-image.sh"
 
 # Additional packages for auto-resize
 BR2_PACKAGE_PARTED=y
