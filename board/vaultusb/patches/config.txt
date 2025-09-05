@@ -1,0 +1,27 @@
+# VaultUSB Raspberry Pi Zero W Configuration
+# Enable UART for debugging
+enable_uart=1
+
+# GPU memory split
+gpu_mem=16
+
+# Boot configuration
+boot_delay=1
+boot_delay_ms=1000
+
+# Kernel configuration
+kernel=zImage
+device_tree=bcm2708-rpi-zero-w.dtb
+
+# Enable I2C and SPI
+dtparam=i2c_arm=on
+dtparam=spi=on
+
+# USB configuration
+dtoverlay=dwc2
+
+# Disable audio
+dtparam=audio=off
+
+# Enable USB gadget mode
+dtoverlay=dwc2,dr_mode=peripheral

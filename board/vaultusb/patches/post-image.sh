@@ -27,28 +27,42 @@ fi
 
 echo "Using rootfs image: $ROOTFS_IMAGE"
 
-if [ ! -f "$IMAGES_DIR/boot.vfat" ]; then
-    echo "Creating boot.vfat image..."
-    cd "$IMAGES_DIR"
-    
-    # Check if boot directory exists
-    if [ ! -d "$IMAGES_DIR/boot" ]; then
-        echo "ERROR: boot directory not found at $IMAGES_DIR/boot"
-        ls -la "$IMAGES_DIR"
-        exit 1
-    fi
-    
-    dd if=/dev/zero of=boot.vfat bs=1M count=256
-    mkfs.vfat -F 32 boot.vfat
-    mkdir -p /tmp/boot_mount
-    mount -o loop boot.vfat /tmp/boot_mount
-    cp -a "$IMAGES_DIR/boot"/* /tmp/boot_mount/
-    umount /tmp/boot_mount
-    rmdir /tmp/boot_mount
-    echo "✓ boot.vfat created"
-else
-    echo "✓ boot.vfat already exists"
+# Always recreate boot.vfat to ensure it's up to date
+echo "Creating boot.vfat image..."
+cd "$IMAGES_DIR"
+
+# Check if boot directory exists
+if [ ! -d "$IMAGES_DIR/boot" ]; then
+    echo "ERROR: boot directory not found at $IMAGES_DIR/boot"
+    ls -la "$IMAGES_DIR"
+    exit 1
 fi
+
+# Debug: Show boot directory contents
+echo "Boot directory contents:"
+ls -la "$IMAGES_DIR/boot"
+
+# Create boot.vfat image
+dd if=/dev/zero of=boot.vfat bs=1M count=256
+mkfs.vfat -F 32 boot.vfat
+mkdir -p /tmp/boot_mount
+mount -o loop boot.vfat /tmp/boot_mount
+
+# Copy all files from boot directory
+echo "Copying files to boot.vfat..."
+cp -a "$IMAGES_DIR/boot"/* /tmp/boot_mount/
+
+# Debug: Verify files were copied
+echo "Files copied to boot.vfat:"
+ls -la /tmp/boot_mount/
+
+# Check file sizes
+echo "File sizes in boot.vfat:"
+du -h /tmp/boot_mount/*
+
+umount /tmp/boot_mount
+rmdir /tmp/boot_mount
+echo "✓ boot.vfat created"
 
 # Crea genimage.cfg
 cat > "$PATCHES_DIR/genimage.cfg" << 'EOF'
