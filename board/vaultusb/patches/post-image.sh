@@ -4,14 +4,14 @@ set -e
 echo "=== VaultUSB Post-Image Script ==="
 echo "Generating SD card image with genimage..."
 
-# Debug: Show available files
-echo "Available files in images directory:"
-ls -la "$IMAGES_DIR"
-
 # Percorsi
 IMAGES_DIR="/app/usb-vault/third_party/buildroot-2024.02.6/output/images"
 PATCHES_DIR="/app/usb-vault/board/vaultusb/patches"
 TARGET_DIR="/app/usb-vault/third_party/buildroot-2024.02.6/output/target"
+
+# Debug: Show available files
+echo "Available files in images directory:"
+ls -la "$IMAGES_DIR"
 
 # Crea le immagini se non esistono
 ROOTFS_IMAGE=""
