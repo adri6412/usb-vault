@@ -402,9 +402,8 @@ EOF
   print_step "Configuro external tree"
   printf "BR2_EXTERNAL=%s\n" "${BOARD_DIR}" >> .config
 
-  # Clean and reconfigure to avoid dependency issues
-  print_step "Pulisco build precedente per evitare conflitti"
-  make clean
+  # Note: Non facciamo make clean per permettere build incrementali
+  # Se necessario, eseguire manualmente: make clean
   
   print_step "Avvio build immagine (questo richiede tempo)"
   make -j"$(nproc)" || make
