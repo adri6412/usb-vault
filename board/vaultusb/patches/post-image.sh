@@ -65,7 +65,7 @@ rmdir /tmp/boot_mount
 echo "✓ boot.vfat created"
 
 # Crea genimage.cfg
-cat > "$PATCHES_DIR/genimage.cfg" << 'EOF'
+cat > "$PATCHES_DIR/genimage.cfg" << EOF
 image sdcard.img {
     hdimage {
         partition-table-type = "mbr"
