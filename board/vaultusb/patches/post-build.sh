@@ -12,9 +12,10 @@ PATCHES_DIR="$1/patches"
 OUTPUT_DIR="$2"
 IMAGES_DIR="$2/images"
 
-# Percorsi corretti
+# Percorsi corretti - usa percorsi assoluti
 TARGET_DIR="/app/usb-vault/third_party/buildroot-2024.02.6/output/target"
 IMAGES_OUTPUT_DIR="/app/usb-vault/third_party/buildroot-2024.02.6/output/images"
+PATCHES_DIR_ABS="/app/usb-vault/board/vaultusb/patches"
 
 # Crea le immagini se non esistono
 if [ ! -f "$IMAGES_OUTPUT_DIR/rootfs.ext2" ]; then
@@ -44,7 +45,8 @@ if [ ! -f "$IMAGES_OUTPUT_DIR/boot.vfat" ]; then
 fi
 
 # Crea genimage.cfg corretto per Raspberry Pi
-cat > "$PATCHES_DIR/genimage.cfg" << 'GENEOF'
+mkdir -p "$PATCHES_DIR_ABS"
+cat > "$PATCHES_DIR_ABS/genimage.cfg" << 'GENEOF'
 image sdcard.img {
     hdimage {
         partition-table-type = "mbr"
@@ -71,7 +73,7 @@ cd "$IMAGES_OUTPUT_DIR"
 mkdir -p input
 cp boot.vfat input/
 cp rootfs.ext2 input/
-/app/usb-vault/third_party/buildroot-2024.02.6/output/host/bin/genimage --config "$PATCHES_DIR/genimage.cfg" --rootpath "$TARGET_DIR"
+/app/usb-vault/third_party/buildroot-2024.02.6/output/host/bin/genimage --config "$PATCHES_DIR_ABS/genimage.cfg" --rootpath "$TARGET_DIR"
 
 echo "✓ Post-build script completato"
 echo "✓ Immagine SD creata: $IMAGES_OUTPUT_DIR/sdcard.img"
