@@ -143,8 +143,44 @@ EOF
 set -euo pipefail
 
 APP_DIR="/opt/vaultusb"
+RESIZE_MARKER="/etc/vaultusb-fs-resized"
 
 log() { echo "[vaultusb-firstboot] $*"; }
+
+# Esegui auto-resize del filesystem se necessario
+if [ ! -f "${RESIZE_MARKER}" ]; then
+  log "Primo avvio rilevato, eseguo auto-resize filesystem..."
+  
+  # Attendi che la partizione sia disponibile
+  for i in {1..30}; do
+    if [ -b "/dev/mmcblk0p2" ]; then
+      log "Partizione root trovata"
+      break
+    fi
+    log "Attendo partizione root... (tentativo $i/30)"
+    sleep 2
+  done
+  
+  if [ -b "/dev/mmcblk0p2" ]; then
+    log "Espando filesystem per utilizzare tutto lo spazio SD..."
+    
+    # Espandi la partizione
+    parted -s /dev/mmcblk0 resizepart 2 100% || log "WARNING: Impossibile espandere partizione"
+    partprobe /dev/mmcblk0
+    sleep 2
+    
+    # Espandi il filesystem
+    resize2fs /dev/mmcblk0p2 || log "WARNING: Impossibile espandere filesystem"
+    
+    # Crea marker
+    touch "${RESIZE_MARKER}"
+    log "Filesystem espanso con successo"
+  else
+    log "WARNING: Partizione root non trovata, skip resize"
+  fi
+else
+  log "Filesystem già ridimensionato, skip"
+fi
 
 # C++ binary is shipped by Buildroot package as /usr/local/bin/vaultusb_cpp
 if [ ! -x "/usr/local/bin/vaultusb_cpp" ]; then
@@ -194,6 +230,93 @@ esac
 exit 0
 EOF
   chmod +x "${OVERLAY_DIR}/etc/init.d/S98vaultusb-firstboot"
+
+  # Crea servizio systemd per auto-resize (backup method)
+  cat > "${OVERLAY_DIR}/etc/systemd/system/vaultusb-resize.service" << 'EOF'
+[Unit]
+Description=VaultUSB Filesystem Auto-Resize
+After=local-fs.target
+Before=vaultusb.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vaultusb-resize.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  # Crea script di resize dedicato per systemd
+  cat > "${OVERLAY_DIR}/usr/local/sbin/vaultusb-resize.sh" << 'EOF'
+#!/bin/bash
+# Script systemd per auto-resize filesystem
+
+set -e
+
+RESIZE_MARKER="/etc/vaultusb-fs-resized"
+ROOT_PARTITION="/dev/mmcblk0p2"
+
+log() {
+    echo "[VaultUSB-Resize] $*" | tee -a /var/log/vaultusb-resize.log
+    logger -t vaultusb-resize "$*"
+}
+
+# Controlla se il resize è già stato fatto
+if [ -f "${RESIZE_MARKER}" ]; then
+    log "Filesystem già ridimensionato, skip"
+    exit 0
+fi
+
+log "Inizio processo di ridimensionamento filesystem..."
+
+# Attendi che la partizione sia disponibile
+for i in {1..30}; do
+    if [ -b "${ROOT_PARTITION}" ]; then
+        log "Partizione root trovata: ${ROOT_PARTITION}"
+        break
+    fi
+    log "Attendo partizione root... (tentativo $i/30)"
+    sleep 2
+done
+
+if [ ! -b "${ROOT_PARTITION}" ]; then
+    log "ERRORE: Partizione root non trovata: ${ROOT_PARTITION}"
+    exit 1
+fi
+
+# Espandi la partizione per utilizzare tutto lo spazio disponibile
+log "Espando partizione per utilizzare tutto lo spazio SD..."
+parted -s /dev/mmcblk0 resizepart 2 100% || {
+    log "ERRORE: Impossibile espandere partizione"
+    exit 1
+}
+
+# Rileva la nuova dimensione della partizione
+log "Rilevo nuova dimensione partizione..."
+partprobe /dev/mmcblk0
+sleep 2
+
+# Espandi il filesystem per utilizzare la nuova dimensione della partizione
+log "Espando filesystem ext4..."
+resize2fs "${ROOT_PARTITION}" || {
+    log "ERRORE: Impossibile espandere filesystem"
+    exit 1
+}
+
+# Verifica il resize
+NEW_SIZE=$(df -h / | tail -1 | awk '{print $2}')
+log "Filesystem ridimensionato con successo. Nuova dimensione: ${NEW_SIZE}"
+
+# Crea marker per evitare resize futuri
+touch "${RESIZE_MARKER}"
+log "Marker creato: ${RESIZE_MARKER}"
+
+log "Ridimensionamento completato con successo!"
+EOF
+  chmod +x "${OVERLAY_DIR}/usr/local/sbin/vaultusb-resize.sh"
 
   # Create BR external tree to register overlay and options
   mkdir -p "${BOARD_DIR}"
